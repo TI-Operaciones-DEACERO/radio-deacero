@@ -19,6 +19,7 @@ npm test                   # 162 pruebas, sin red
 | `HOST` | `127.0.0.1` | `0.0.0.0` para controlarlo desde otro equipo **de tu red** |
 | `DATA_DIR` | `./data` | Dónde se guardan los podcasts (`podcasts.json`) |
 | `REMOTE_TOKEN` | — | Clave para quien no sea la propia máquina (header `x-token` o `?t=`). **Defínela si `HOST=0.0.0.0`** |
+| `PANEL_PUBLICO` | `1` | `0` obliga a usar clave también en `/panel` (por defecto `/panel` no la pide; ver la sección de seguridad) |
 | `YTDLP_BIN` | autodetectado | Ruta de yt-dlp si no está en el PATH |
 | `YTDLP_EXTRA` | — | Opciones extra, p. ej. `--cookies /ruta/cookies.txt` |
 
@@ -31,6 +32,7 @@ cierra a la fuerza y no siempre guarda el último modo elegido, así que el par�
 | Dirección | Vista |
 |---|---|
 | `/` | Reproductor normal: carátula o video a un lado, controles al otro. |
+| `/panel` | **El panel de `/remote`, pero la música suena en ESTE navegador y no pide clave** (búsqueda, géneros, podcasts, pausa, volumen…). No es una pantalla ni un control remoto: no recibe las órdenes de nadie, no manda las suyas a las demás pantallas y no pisa su estado. **Lleva su propia racha** (el navegador manda un id de sesión; el servidor guarda aparte el género, las canciones que le quedan y las últimas que sonaron; caduca a las 2 h sin uso y hay tope de 100 sesiones), así que elegir género o buscar aquí NO cambia lo que suena en `/` ni en `/kiosco`. Solo audio (sin video ni letra). Los navegadores no dejan sonar sin un toque: la primera vez aparece «Toca para empezar a escuchar». Sin clave se ocultan «Guardar podcast», quitar podcasts y la pestaña *Equipos*. |
 | `/kiosco` | **Vista kiosco, solo para ver**: el video de fondo a pantalla completa, difuminado (se distingue el video, sin detalle), y al frente la **hora en grande** (12 h con AM/PM, segundos y fecha), la canción y la que sigue. No tiene botones, barra de progreso, volumen, género ni dirección de control, y el teclado no hace nada: todo se maneja desde `/remote` (o `play`). Con `?mode=audio` el fondo es la carátula difuminada en vez del video. |
 
 El desenfoque no usa `filter: blur` (a 1080p hace tropezar a una Raspberry Pi): el video se dibuja en un mosaico de 96×54 px y el navegador lo escala a pantalla
@@ -117,7 +119,7 @@ servidor (el estado del radio —género y recientes— es uno solo). Está pens
 | `GET /api/search?q=` | géneros que coinciden |
 | `GET /api/events` | flujo SSE de órdenes (lo usa la pantalla) |
 
-Con `REMOTE_TOKEN` definido, todo `/api/*` (salvo `/api/health`) exige la clave a los clientes remotos; la propia Pi (loopback) no.
+Con `REMOTE_TOKEN` definido, todo `/api/*` (salvo `/api/health`) exige la clave a los clientes remotos; la propia Pi (loopback) no. **Excepción para `/panel`** (solo `GET`): `/api/genres`, `/api/play/*`, `/api/thumb/*`, `/api/podcast/search`, `/api/podcasts` (leer) y `/api/next` **únicamente con `?sid=` válido** (8–40 caracteres `A-Za-z0-9_-`). Siguen exigiendo clave todo lo que manda órdenes a pantallas (`/api/cmd`, `/api/events`, `/api/state`), lo que muestra equipos (`/api/clients`, `/api/history`), guardar o quitar podcasts y `/api/next` sin `sid` (la racha de las pantallas). Riesgo asumido: cualquiera que alcance el puerto puede oír música por el servidor (gasta su ancho de banda y yt-dlp). `PANEL_PUBLICO=0` cierra esa excepción.
 
 ## Raspberry Pi (instalación sin `sudo`)
 

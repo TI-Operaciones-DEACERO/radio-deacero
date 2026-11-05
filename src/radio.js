@@ -4,7 +4,11 @@
  * Cada 4–6 canciones salta a un género al azar (sin repetir los últimos 3).
  * Un género pedido a mano también dura una racha de 4–6 y luego vuelve la rotación sola.
  * Las canciones salen de buscar una consulta al azar del género y se guardan en
- * un pool para no buscar en cada pista. Una sola instancia = un solo oyente. */
+ * un pool para no buscar en cada pista.
+ *
+ * Sesiones: cada oyente independiente (p. ej. /panel) manda su id y lleva SU racha (género, canciones que
+ * le quedan, últimas canciones). Sin id se usa la sesión principal, la de las pantallas (/ y /kiosco).
+ * Se comparten solo las cachés: el pool de resultados de yt-dlp y la lista de pistas que no se pudieron reproducir. */
 
 const err = (code, msg) => Object.assign(new Error(msg || code), { code });
 
@@ -18,18 +22,39 @@ function createRadio({
   /* probe(id) → ¿se puede reproducir? Se comprueba ANTES de ofrecer la canción: hasta probeTries en una búsqueda (alguien espera)
    * y probeTriesRacha en la rotación (se prepara por adelantado: si la mitad de las pistas fallan, 6 intentos casi nunca se agotan).
    * Las que fallan se evitan badTtlMs (después se reintentan: puede haberse corregido la red o el reloj). */
-  probe = async () => true, probeTries = 3, probeTriesRacha = 6, badTtlMs = 30 * 60 * 1000, now = Date.now
+  probe = async () => true, probeTries = 3, probeTriesRacha = 6, badTtlMs = 30 * 60 * 1000, now = Date.now,
+  /* Sesiones de oyentes independientes: caducan sin actividad y hay un tope (se descartan las más antiguas). */
+  sessionTtlMs = 2 * 60 * 60 * 1000, maxSessions = 100
 }) {
   const byId = new Map(genres.map((g) => [g.id, g]));
   const randomPool = genres.some((g) => g.featured) ? genres.filter((g) => g.featured) : genres;
   const pools = new Map();   /* genreId → canciones aún sin tocar */
-  const recent = new Set();  /* ids ya servidos (orden de inserción) */
-  const lastGenres = [];
   const bad = new Map();     /* id → hasta cuándo se evita (no se pudo reproducir) */
-  let genre = null;
-  let left = 0;
-  let locked = false; /* la racha actual la pidió el usuario: si no hay música de ese género avisa en vez de saltar a otro */
-  let chain = Promise.resolve();
+
+  /* Estado de UN oyente. recent = ids ya servidos (orden de inserción). locked = la racha actual la pidió el usuario:
+   * si no hay música de ese género avisa en vez de saltar a otro. chain serializa sus peticiones (el cliente precarga y pide dos a la vez). */
+  const newSession = () => ({ genre: null, left: 0, locked: false, lastGenres: [], recent: new Set(), chain: Promise.resolve(), seen: now() });
+  const main = newSession();
+  const sessions = new Map(); /* id → estado */
+
+  function sessionFor(id) {
+    if (!id) return main;
+    const t = now();
+    for (const [k, v] of sessions) if (t - v.seen > sessionTtlMs) sessions.delete(k);
+    let s = sessions.get(id);
+    if (!s) {
+      s = newSession();
+      sessions.set(id, s);
+      while (sessions.size > maxSessions) {
+        let oldest = null;
+        for (const [k, v] of sessions) if (k !== id && (oldest === null || v.seen < sessions.get(oldest).seen)) oldest = k;
+        if (oldest === null) break;
+        sessions.delete(oldest);
+      }
+    }
+    s.seen = t;
+    return s;
+  }
 
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   const between = ([a, b]) => a + Math.floor(rng() * (b - a + 1));
@@ -48,21 +73,21 @@ function createRadio({
     return false;
   }
 
-  function remember(id) {
-    recent.add(id);
-    if (recent.size > recentCap) recent.delete(recent.values().next().value);
+  function remember(s, id) {
+    s.recent.add(id);
+    if (s.recent.size > recentCap) s.recent.delete(s.recent.values().next().value);
   }
 
-  function randomGenre(exclude = []) {
-    const skip = new Set([...lastGenres.slice(-avoidLastGenres), ...exclude]);
+  function randomGenre(s, exclude = []) {
+    const skip = new Set([...s.lastGenres.slice(-avoidLastGenres), ...exclude]);
     const cands = randomPool.filter((g) => !skip.has(g.id));
     return pick(cands.length ? cands : randomPool.filter((g) => !exclude.includes(g.id)));
   }
 
   /* allowRepeat: un género pedido a mano puede agotar sus canciones nuevas; entonces
    * se repiten las antiguas en vez de fallar. */
-  async function takeTrack(g, allowRepeat = false) {
-    const fresh = (list) => list.filter((t) => !isBad(t.id) && (allowRepeat || !recent.has(t.id)));
+  async function takeTrack(s, g, allowRepeat = false) {
+    const fresh = (list) => list.filter((t) => !isBad(t.id) && (allowRepeat || !s.recent.has(t.id)));
     let pool = fresh(pools.get(g.id) || []);
     for (let attempt = 0; !pool.length && attempt < SEARCH_ATTEMPTS; attempt++) {
       try {
@@ -83,68 +108,69 @@ function createRadio({
 
   /* Si pedir un género/cambio falla, el radio vuelve al estado anterior (la
    * pantalla sigue con lo que suena y el servidor no queda "fijado" en vano). */
-  async function nextInner(opts = {}) {
-    const snap = { genre, left, locked };
-    try { return await pickNext(opts); }
+  async function nextInner(s, opts = {}) {
+    const snap = { genre: s.genre, left: s.left, locked: s.locked };
+    try { return await pickNext(s, opts); }
     catch (e) {
-      if (opts.genre || opts.change) ({ genre, left, locked } = snap);
+      if (opts.genre || opts.change) Object.assign(s, snap);
       throw e;
     }
   }
 
   /* Búsqueda explícita (control remoto): una pauta ÚNICA. Toca el primer resultado nuevo y la
    * lista sigue como iba (mismo género, misma racha, mismo candado): Jazz → [búsqueda] → Jazz. */
-  async function pickQuery(q) {
+  async function pickQuery(s, q) {
     let found = [];
     try { found = await search(q, 8); } catch { /* sin resultados */ }
-    const fresh = found.filter((t) => !recent.has(t.id) && !isBad(t.id));
+    const fresh = found.filter((t) => !s.recent.has(t.id) && !isBad(t.id));
     const ordered = [...fresh.filter((t) => !(t.duration > SONG_MAX_SEC)), ...fresh.filter((t) => t.duration > SONG_MAX_SEC)];
     let track = null;
     for (const t of ordered.slice(0, probeTries)) { if (await playable(t)) { track = t; break; } }
     if (!track) throw err('NO_SOURCE', ordered.length ? `Ningún resultado de "${q}" se pudo reproducir` : `Sin resultados para "${q}"`);
-    remember(track.id);
+    remember(s, track.id);
     return { track, genre: { id: 'search', label: `Búsqueda: ${q}`, emoji: '🔎', color: '#F59B23' }, genreChanged: true, genreLeft: null };
   }
 
-  async function pickNext({ genre: wanted, change, query }) {
-    if (query) return pickQuery(query);
+  async function pickNext(s, { genre: wanted, change, query }) {
+    if (query) return pickQuery(s, query);
     let switched = false;
     if (wanted) {
       const g = byId.get(wanted);
       if (!g) throw err('UNKNOWN_GENRE', `Género desconocido: ${wanted}`);
-      if (!locked || genre !== g) switched = true;
-      genre = g; locked = true; left = between(perGenre); switched = true; /* racha nueva, como las automáticas */
+      s.genre = g; s.locked = true; s.left = between(perGenre); switched = true; /* racha nueva, como las automáticas */
     } else if (change) {
-      locked = false; genre = null;
+      s.locked = false; s.genre = null;
     }
-    if (!genre || left <= 0) { locked = false; genre = randomGenre(); left = between(perGenre); switched = true; }
+    if (!s.genre || s.left <= 0) { s.locked = false; s.genre = randomGenre(s); s.left = between(perGenre); switched = true; }
 
     const tried = [];
     for (;;) {
-      const track = (await takeTrack(genre)) || (locked ? await takeTrack(genre, true) : null);
+      const track = (await takeTrack(s, s.genre)) || (s.locked ? await takeTrack(s, s.genre, true) : null);
       if (track) {
-        if (switched) { lastGenres.push(genre.id); if (lastGenres.length > 20) lastGenres.shift(); }
-        remember(track.id);
+        if (switched) { s.lastGenres.push(s.genre.id); if (s.lastGenres.length > 20) s.lastGenres.shift(); }
+        remember(s, track.id);
         /* Una mezcla de horas cuenta como la "racha" completa del género. */
-        left = track.duration > SONG_MAX_SEC ? 0 : left - 1;
-        return { track, genre: pub(genre), genreChanged: switched, genreLeft: Math.max(left, 0) };
+        s.left = track.duration > SONG_MAX_SEC ? 0 : s.left - 1;
+        return { track, genre: pub(s.genre), genreChanged: switched, genreLeft: Math.max(s.left, 0) };
       }
       /* Un género pedido por el usuario no salta solo a otro: se avisa. */
-      if (locked) throw err('NO_SOURCE', `Sin resultados para ${genre.label}`);
-      tried.push(genre.id);
+      if (s.locked) throw err('NO_SOURCE', `Sin resultados para ${s.genre.label}`);
+      tried.push(s.genre.id);
       if (tried.length >= 3) throw err('NO_SOURCE', 'Ningún género devolvió canciones');
-      genre = randomGenre(tried); left = between(perGenre); switched = true;
+      s.genre = randomGenre(s, tried); s.left = between(perGenre); switched = true;
     }
   }
 
-  /* Serializa: el cliente precarga y puede pedir dos a la vez. */
+  /* Serializa las peticiones de cada sesión; sesiones distintas no se esperan entre sí.
+   * opts.session = id del oyente independiente (sin él, la sesión principal). */
   function next(opts) {
-    const run = chain.then(() => nextInner(opts));
-    chain = run.catch(() => {});
+    const s = sessionFor(opts && opts.session);
+    const run = s.chain.then(() => nextInner(s, opts));
+    s.chain = run.catch(() => {});
     return run;
   }
 
-  return { next };
+  return { next, sessionCount: () => sessions.size };
 }
 
 module.exports = { createRadio };

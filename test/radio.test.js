@@ -289,3 +289,81 @@ test('probe: en la rotación sondea hasta 6 canciones por elección y no se rind
   assert.ok(Number(r.track.id.slice(1)) >= 5);
   assert.ok(probados.length <= 6, 'a lo más 6 sondeos en una elección');
 });
+
+/* ── sesiones: cada oyente (p. ej. /panel) lleva su propia racha; la principal es la de las pantallas ── */
+test('sesiones: elegir género en una sesión no mueve la racha de la principal', async () => {
+  const radio = createRadio({ genres: mkGenres(8), search: mkEndlessSearch(), rng: seeded(5) });
+  const a1 = await radio.next();
+  assert.notEqual(a1.genre.id, 'g8', 'la prueba necesita que la principal no arranque en g8');
+  const p = await radio.next({ genre: 'g8', session: 'panel-1' });
+  assert.equal(p.genre.id, 'g8');
+  const a2 = await radio.next();
+  assert.equal(a2.genre.id, a1.genre.id, 'la principal sigue en su género');
+  assert.equal(a2.genreChanged, false);
+  assert.equal(a2.genreLeft, a1.genreLeft - 1, 'y su racha sigue contando');
+});
+
+test('sesiones: la racha de una sesión sigue sola y no depende de la principal', async () => {
+  const radio = createRadio({ genres: mkGenres(8), search: mkEndlessSearch(), rng: seeded(9) });
+  await radio.next({ genre: 'g3', session: 's' });
+  for (let i = 0; i < 3; i++) {
+    await radio.next(); /* la principal toca lo suyo entre medias */
+    const r = await radio.next({ session: 's' });
+    assert.equal(r.genre.id, 'g3');
+    assert.equal(r.genreChanged, false);
+  }
+});
+
+test('sesiones: cada una tiene su historial (la misma canción puede sonar en dos)', async () => {
+  const search = async () => [{ id: 'solo-1', title: 'Única', channel: 'C', duration: 200 }];
+  const radio = createRadio({ genres: mkGenres(4), search, rng: seeded() });
+  assert.equal((await radio.next()).track.id, 'solo-1');
+  assert.equal((await radio.next({ session: 's' })).track.id, 'solo-1');
+  await assert.rejects(() => radio.next(), { code: 'NO_SOURCE' }, 'la principal sí la recuerda');
+});
+
+test('sesiones: una búsqueda en una sesión no toca la racha de la principal', async () => {
+  const radio = createRadio({ genres: mkGenres(8), search: mkEndlessSearch(), rng: seeded(5) });
+  const a1 = await radio.next();
+  const q = await radio.next({ query: 'bad bunny', session: 's' });
+  assert.equal(q.genre.id, 'search');
+  const a2 = await radio.next();
+  assert.equal(a2.genre.id, a1.genre.id);
+  assert.equal(a2.genreChanged, false);
+});
+
+test('sesiones: las inactivas caducan', async () => {
+  let t = 0;
+  const radio = createRadio({ genres: mkGenres(8), search: mkEndlessSearch(), rng: seeded(2), now: () => t, sessionTtlMs: 60 * 60 * 1000 });
+  await radio.next({ genre: 'g3', session: 's' });
+  assert.equal(radio.sessionCount(), 1);
+  t += 3 * 60 * 60 * 1000;
+  await radio.next({ session: 'otra' });
+  assert.equal(radio.sessionCount(), 1, 'solo queda la que está activa');
+  const r = await radio.next({ session: 's' });
+  assert.equal(r.genreChanged, true, 'la caducada empieza de cero');
+});
+
+test('sesiones: hay un tope y se descartan las más antiguas', async () => {
+  let t = 0;
+  const radio = createRadio({ genres: mkGenres(8), search: mkEndlessSearch(), rng: seeded(4), now: () => t, maxSessions: 3 });
+  for (const s of ['s1', 's2', 's3', 's4', 's5']) { t += 1000; await radio.next({ session: s }); }
+  assert.equal(radio.sessionCount(), 3);
+  const r = await radio.next({ session: 's5' });
+  assert.equal(r.genreChanged, false, 'la más reciente conserva su racha');
+});
+
+test('sesiones: una sesión lenta no bloquea a las demás', async () => {
+  let soltar;
+  const lento = new Promise((r) => { soltar = r; });
+  const genres = [{ id: 'g1', label: 'G1', emoji: '🎵', color: '#fff', featured: true, queries: ['lento'] },
+    { id: 'g2', label: 'G2', emoji: '🎵', color: '#fff', featured: true, queries: ['rapido'] }];
+  const search = async (q) => { if (q === 'lento') await lento; return [{ id: `${q}-1`, title: 'T', channel: 'C', duration: 200 }]; };
+  const radio = createRadio({ genres, search, rng: seeded() });
+  const a = radio.next({ genre: 'g1', session: 'A' });
+  const b = await Promise.race([radio.next({ genre: 'g2', session: 'B' }), new Promise((r) => setTimeout(() => r('bloqueada'), 500))]);
+  assert.notEqual(b, 'bloqueada', 'B no espera a A');
+  assert.equal(b.track.id, 'rapido-1');
+  soltar();
+  assert.equal((await a).track.id, 'lento-1');
+});

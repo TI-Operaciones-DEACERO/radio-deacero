@@ -27,17 +27,50 @@
     if (t) { store.set('pl_token', t.trim()); location.reload(); }
   }
 
+  /* /panel = este mismo panel, pero la música suena en ESTE navegador: el reproductor (app.js con ?view=local) corre en un
+     iframe invisible y las órdenes van directo a él, no a /api/cmd (que las reparte a todas las pantallas). */
+  const LOCAL = /^\/panel\/?$/.test(location.pathname);
+  let engine = null;
+  const player = () => (engine && engine.contentWindow && engine.contentWindow.__player) || null;
+  if (LOCAL) {
+    document.body.classList.add('local');
+    if (!token) document.body.classList.add('anon'); /* sin clave: se ocultan las funciones que la necesitan (guardar podcasts, Equipos) */
+    document.title = 'DEACERO Play';
+    /* Id de sesión: por pestaña (sobrevive a recargar). El servidor lleva una racha aparte para cada id. */
+    let sid = '';
+    try { sid = sessionStorage.getItem('pl_sid') || ''; } catch (_) { /* sin sessionStorage */ }
+    if (!/^[A-Za-z0-9_-]{8,40}$/.test(sid)) {
+      const b = crypto.getRandomValues(new Uint8Array(12));
+      sid = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+      try { sessionStorage.setItem('pl_sid', sid); } catch (_) { /* sin sessionStorage */ }
+    }
+    engine = document.createElement('iframe');
+    engine.className = 'engine'; engine.title = 'Reproductor'; engine.setAttribute('allow', 'autoplay');
+    engine.src = withT('/?view=local&mode=audio&sid=' + sid);
+    document.body.appendChild(engine);
+    addEventListener('message', (e) => {
+      if (e.origin === location.origin && e.source === engine.contentWindow && e.data && e.data.type === 'toast') toast(e.data.msg, e.data.ms);
+    });
+  }
+
   async function call(path, opts) {
     const r = await fetch(path, { ...opts, headers: {
       'content-type': 'application/json',
       'x-client-time': String(Date.now()), /* la hora real: la de la Pi puede estar atrasada */
       ...(token ? { 'x-token': token } : {})
     } });
-    if (r.status === 401) { askToken(); throw new Error('401'); }
+    if (r.status === 401) { if (LOCAL) toast('Esa función necesita la clave del control'); else askToken(); throw new Error('401'); } /* /panel nunca pide clave */
     return r;
   }
 
   async function send(cmd) {
+    if (LOCAL) {
+      const p = player();
+      if (!p) { toast('El reproductor está cargando…'); return false; }
+      p.handleCommand(cmd);
+      setTimeout(refresh, 300);
+      return true;
+    }
     try {
       const r = await call('/api/cmd', { method: 'POST', body: JSON.stringify(cmd) });
       if (r.status === 409) toast('No hay ninguna pantalla abierta');
@@ -55,8 +88,9 @@
 
   function render(s) {
     const live = s.players > 0;
-    $('conn').textContent = live ? (s.players === 1 ? 'Pantalla conectada' : s.players + ' pantallas') : 'Sin pantalla';
+    $('conn').textContent = LOCAL ? 'Suena en este equipo' : live ? (s.players === 1 ? 'Pantalla conectada' : s.players + ' pantallas') : 'Sin pantalla';
     $('conn').className = 'conn ' + (live ? 'ok' : 'bad');
+    $('startLocal').hidden = !(LOCAL && s.blocked);
 
     const t = s.track;
     $('title').textContent = t ? t.title : 'Sin reproducción';
@@ -79,11 +113,13 @@
   }
 
   async function refresh() {
+    if (LOCAL) { const p = player(); if (p) render(p.getState()); return; }
     try { render(await (await call('/api/state')).json()); }
     catch (_) { $('conn').textContent = 'Sin conexión'; $('conn').className = 'conn bad'; }
   }
 
   /* ── botones ────────────────────────────────────────────────── */
+  $('startLocal').addEventListener('click', () => send({ cmd: 'play' }));
   $('prev').addEventListener('click', () => send({ cmd: 'prev' }));
   $('next').addEventListener('click', () => send({ cmd: 'next' }));
   $('toggle').addEventListener('click', () => send({ cmd: 'toggle' }));
@@ -215,7 +251,7 @@
         play.setAttribute('aria-label', 'Tocar ' + ep.title);
         play.innerHTML = '<svg><use href="#i-play"/></svg>';
         play.addEventListener('click', async () => {
-          if (await send({ cmd: 'track', kind: 'podcast', track: { id: ep.id, title: ep.title, channel: ep.channel, duration: ep.duration } })) toast('Enviado a la pantalla');
+          if (await send({ cmd: 'track', kind: 'podcast', track: { id: ep.id, title: ep.title, channel: ep.channel, duration: ep.duration } })) toast(LOCAL ? 'Reproduciendo…' : 'Enviado a la pantalla');
         });
         row.append(info, play);
         box.appendChild(row);
@@ -288,8 +324,8 @@
   }
   setInterval(() => { if (!$('panelDevs').hidden) loadDevices(); }, 3000);
 
-  { const t = store.get('pl_tab'); showTab(['podcasts', 'devices'].includes(t) ? t : 'music'); }
+  { const t = store.get('pl_tab'); showTab(['podcasts', 'devices'].includes(t) && !(t === 'devices' && document.body.classList.contains('anon')) ? t : 'music'); }
   loadGenres();
   refresh();
-  setInterval(refresh, 2000);
+  setInterval(refresh, LOCAL ? 1000 : 2000);
 })();

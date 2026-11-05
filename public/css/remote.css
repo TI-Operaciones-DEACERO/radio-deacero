@@ -65,4 +65,13 @@ html { font-size: 16px; }
 .dev-meta { color: var(--txt2); font-size: .85rem; margin-top: .15rem; overflow-wrap: anywhere; }
 .dev-you { color: var(--pl-300); font-weight: 700; font-size: .8rem; margin-left: .3rem; }
 .rem .toast { bottom: 1rem; }
+
+/* /panel: el reproductor vive en un iframe invisible; el video y la letra no existen aquí (solo audio) */
+.engine { position: fixed; left: 0; top: 0; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+.local #mode, .local #lyrics { display: none; }
+/* sin clave (/panel abierto): nada que la necesite */
+.anon #tabDevs, .anon #podSave, .anon .pod .del { display: none; }
+.anon .tabs { grid-template-columns: repeat(2, 1fr); }
+.anon .search-btns { grid-template-columns: 1fr; }
+.btn-start { background: var(--pl-500); color: #000; border-color: transparent; font-weight: 800; font-size: 1rem; }
 @media (min-width: 700px) { .rem { padding-top: 2rem; } }

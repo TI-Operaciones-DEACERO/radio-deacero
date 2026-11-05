@@ -229,10 +229,10 @@ test('GET /api/next?q= pasa la búsqueda al radio', () => run({}, async ({ base,
 
 test('token: sin él, un cliente remoto recibe 401; con él (header o ?t=) pasa; /api/health siempre', () =>
   run({ deps: { token: 's3cret', trustLoopback: false } }, async ({ base }) => {
-    assert.equal((await fetch(`${base}/api/genres`)).status, 401);
-    assert.equal((await fetch(`${base}/api/genres?t=mal`)).status, 401);
-    assert.equal((await fetch(`${base}/api/genres?t=s3cret`)).status, 200);
-    assert.equal((await fetch(`${base}/api/genres`, { headers: { 'x-token': 's3cret' } })).status, 200);
+    assert.equal((await fetch(`${base}/api/state`)).status, 401);
+    assert.equal((await fetch(`${base}/api/state?t=mal`)).status, 401);
+    assert.equal((await fetch(`${base}/api/state?t=s3cret`)).status, 200);
+    assert.equal((await fetch(`${base}/api/state`, { headers: { 'x-token': 's3cret' } })).status, 200);
     assert.equal((await post(base, '/api/cmd', { cmd: 'next' })).status, 401);
     assert.equal((await fetch(`${base}/api/health`)).status, 200);
     assert.equal((await fetch(`${base}/`)).status, 200, 'la página en sí no es secreta');
@@ -249,8 +249,57 @@ test('/remote sirve la página de control (sin .html)', () => run({}, async ({ b
   assert.equal(await r.text(), '<h1>control</h1>');
 }));
 
+/* ── /panel sin clave: solo lo que usa un oyente; nada que controle pantallas ── */
+const CERRADO = { token: 's3cret', trustLoopback: false };
+const SID_OK = 'panel-abc12345';
+
+test('/panel sin clave: lo que necesita un oyente es libre', () => run({ deps: CERRADO }, async ({ base, calls }) => {
+  assert.equal((await fetch(`${base}/api/genres`)).status, 200);
+  assert.equal((await fetch(`${base}/api/thumb/${ID}`)).status, 200);
+  assert.equal((await fetch(`${base}/api/play/${ID}?mode=audio`)).status, 200);
+  assert.equal((await fetch(`${base}/api/podcast/search?q=radio`)).status, 200);
+  assert.equal((await fetch(`${base}/api/podcasts`)).status, 200);
+  const r = await fetch(`${base}/api/next?sid=${SID_OK}`);
+  assert.equal(r.status, 200);
+  assert.deepEqual(calls.next, [{ genre: undefined, change: false, query: undefined, session: SID_OK }], 'la sesión llega al radio');
+}));
+
+test('/panel sin clave: lo que controla pantallas o muestra equipos sigue cerrado', () => run({ deps: CERRADO }, async ({ base }) => {
+  for (const p of ['/api/next', `/api/next?sid=corto`, '/api/next?genre=rock', '/api/state', '/api/events', '/api/clients', '/api/history', '/api/time', '/api/lyrics?title=x', '/api/search?q=a']) {
+    assert.equal((await fetch(`${base}${p}`)).status, 401, p);
+  }
+  assert.equal((await post(base, '/api/cmd', { cmd: 'next' })).status, 401);
+  assert.equal((await post(base, '/api/state', {})).status, 401);
+  assert.equal((await post(base, '/api/podcasts', { name: 'a', q: 'a' })).status, 401);
+  assert.equal((await del(base, '/api/podcasts/abc123')).status, 401);
+  assert.equal((await del(base, '/api/history')).status, 401);
+}));
+
+test('/panel sin clave: el interruptor panelOpen:false lo vuelve a cerrar', () => run({ deps: { ...CERRADO, panelOpen: false } }, async ({ base }) => {
+  for (const p of ['/api/genres', `/api/next?sid=${SID_OK}`, `/api/play/${ID}`, `/api/thumb/${ID}`, '/api/podcasts']) assert.equal((await fetch(`${base}${p}`)).status, 401, p);
+  assert.equal((await fetch(`${base}/api/genres?t=s3cret`)).status, 200, 'con clave sigue funcionando');
+}));
+
+test('/api/next: un id de sesión mal formado → 400 (con clave); sin sesión no se manda "session"', () => run({ deps: CERRADO }, async ({ base, calls }) => {
+  for (const sid of ['', 'corto', 'x'.repeat(41), 'con espacio 123', 'a/b/c/d/e/f/g']) {
+    assert.equal((await fetch(`${base}/api/next?sid=${encodeURIComponent(sid)}&t=s3cret`)).status, 400, JSON.stringify(sid));
+  }
+  assert.equal(calls.next.length, 0);
+  await fetch(`${base}/api/next?t=s3cret`);
+  assert.deepEqual(calls.next, [{ genre: undefined, change: false, query: undefined }]);
+}));
+
+test('/panel sirve la misma página que /remote (la app decide por la ruta si reproduce aquí)', () => run({}, async ({ base }) => {
+  for (const p of ['/panel', '/panel/']) {
+    const r = await fetch(`${base}${p}`);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /text\/html/);
+    assert.equal(await r.text(), '<h1>control</h1>');
+  }
+}));
+
 /* ── podcasts ───────────────────────────────────────────────── */
-const del = (base, p) => fetch(`${base}${p}`, { method: 'DELETE' });
+const del =(base, p) => fetch(`${base}${p}`, { method: 'DELETE' });
 
 test('podcasts: guardar, listar y quitar', () => run({}, async ({ base }) => {
   assert.deepEqual(await (await fetch(`${base}/api/podcasts`)).json(), []);
@@ -287,8 +336,8 @@ test('GET /api/podcast/search: episodios (por fecha) o errores claros', () => ru
   assert.deepEqual(await (await fetch(`${base}/api/podcast/search?q=nada`)).json(), []);
 }));
 
-test('podcasts: con token y cliente remoto sin clave → 401', () => run({ deps: { token: 's3cret', trustLoopback: false } }, async ({ base }) => {
-  assert.equal((await fetch(`${base}/api/podcasts`)).status, 401);
+test('podcasts: con token y cliente remoto sin clave, leer es libre (/panel) pero guardar y quitar → 401', () => run({ deps: { token: 's3cret', trustLoopback: false } }, async ({ base }) => {
+  assert.equal((await fetch(`${base}/api/podcasts`)).status, 200);
   assert.equal((await post(base, '/api/podcasts', { name: 'a', q: 'a' })).status, 401);
   assert.equal((await del(base, '/api/podcasts/abc123')).status, 401);
   assert.equal((await post(base, '/api/podcasts', { name: 'a', q: 'a' }, { 'x-token': 's3cret' })).status, 201);

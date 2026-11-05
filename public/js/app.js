@@ -10,6 +10,10 @@
   /* Dos vistas con el mismo reproductor: la normal y /kiosco (video de fondo difuminado + reloj grande). */
   const VIEW = /^\/kiosco\/?$/.test(location.pathname) || params.get('view') === 'kiosco' ? 'kiosco' : 'normal';
   document.body.dataset.view = VIEW;
+  /* ?view=local: motor de /panel (va dentro de un iframe invisible). Reproduce aquí y NO es una pantalla: no escucha las órdenes
+     de /remote, no reporta su estado al servidor (no pisa el de la pantalla real) y avisa a /panel con mensajes. */
+  const LOCAL = params.get('view') === 'local';
+  const SID = LOCAL ? params.get('sid') || '' : ''; /* racha propia: el servidor la lleva aparte de la de las pantallas */
   /* Pantalla panorámica alimentada con 1920×1080 y estirada por el panel: ?estirar=2 diseña la vista al ancho real
      (el doble) y la comprime a la mitad, así las letras salen con su forma normal. 1 = pantalla normal. */
   const ESTIRAR = Math.min(4, Math.max(1, Number(params.get('estirar')) || 1));
@@ -42,6 +46,7 @@
 
   let toastTimer = 0;
   function toast(msg, ms) {
+    if (LOCAL) { try { parent.postMessage({ type: 'toast', msg, ms }, location.origin); } catch (_) { /* sin panel */ } return; }
     const t = $('toast');
     t.textContent = msg;
     t.classList.add('show');
@@ -61,6 +66,7 @@
     if (opts && opts.genre) q.set('genre', opts.genre);
     if (opts && opts.change) q.set('change', '1');
     if (opts && opts.query) q.set('q', opts.query);
+    if (SID) q.set('sid', SID);
     return getJson('/api/next' + (q.toString() ? '?' + q : ''));
   }
 
@@ -154,7 +160,7 @@
 
   function startPlayback() {
     const p = media.play();
-    if (p && p.catch) p.catch((e) => { if (e.name === 'NotAllowedError') $('start').hidden = false; });
+    if (p && p.then) p.then(() => { $('start').hidden = true; }, (e) => { if (e.name === 'NotAllowedError') $('start').hidden = false; });
   }
 
   function playItem(item) {
@@ -332,7 +338,7 @@
   }
   vol.addEventListener('input', () => { if (media.muted && vol.value > 0) media.muted = false; applyVolume(); });
   function nudgeVolume(d) { vol.value = Math.max(0, Math.min(100, Number(vol.value) + d)); media.muted = false; applyVolume(); toast('Volumen ' + vol.value + '%', 900); }
-  function setVolumeValue(v) { vol.value = Math.max(0, Math.min(100, v)); media.muted = false; applyVolume(); toast('Volumen ' + vol.value + '%', 900); }
+  function setVolumeValue(v) { vol.value = Math.max(0, Math.min(100, v)); media.muted = false; applyVolume(); if (!LOCAL) toast('Volumen ' + vol.value + '%', 900); }
   function toggleMute() { media.muted = !media.muted; applyVolume(); }
 
   /* ── modo audio / video ─────────────────────────────────────── */
@@ -429,7 +435,7 @@
   /* ── visualizador (analizador real si se puede; si no, barras sintéticas) ── */
   const canvas = $('vis');
   const cx = canvas.getContext('2d');
-  let analyser = null, freq = null, audioCtx = null, visOn = params.get('vis') !== '0', visRaf = 0, lastFrame = 0;
+  let analyser = null, freq = null, audioCtx = null, visOn = params.get('vis') !== '0' && !LOCAL, visRaf = 0, lastFrame = 0;
   const BARS = 40;
 
   async function ensureAudioGraph() {
@@ -552,6 +558,7 @@
   /* ── control remoto (SSH / web /remote) ─────────────────────── */
   let lastReport = 0, reportTimer = 0;
   function reportState() {
+    if (LOCAL) return;
     clearTimeout(reportTimer);
     reportTimer = setTimeout(() => {
       lastReport = Date.now();
@@ -566,7 +573,8 @@
 
   const CMD_LABEL = { toggle: 'Pausa / play', play: 'Play', pause: 'Pausa', next: 'Siguiente', prev: 'Anterior', random: 'Otro género al azar', mute: 'Silenciar', lyrics: 'Letra' };
   function handleCommand(c) {
-    if (CMD_LABEL[c.cmd]) toast('Remoto · ' + CMD_LABEL[c.cmd], 1500);
+    const say = (m, ms) => { if (!LOCAL) toast('Remoto · ' + m, ms); }; /* el aviso "Remoto ·" solo tiene sentido en una pantalla */
+    if (CMD_LABEL[c.cmd]) say(CMD_LABEL[c.cmd], 1500);
     switch (c.cmd) {
       case 'toggle': toggle(); break;
       case 'play': startPlayback(); break;
@@ -574,9 +582,9 @@
       case 'next': advance(); break;
       case 'prev': prev(); break;
       case 'random': changeGenre(null); break;
-      case 'genre': toast('Remoto · género', 1500); changeGenre(c.id); break;
-      case 'search': toast('Remoto · buscando "' + c.q + '"', 2500); playQuery(c.q); break;
-      case 'track': toast('Remoto · ' + (c.kind === 'podcast' ? 'podcast' : 'canción'), 2000); playTrackOnce(c.track, c.kind); break;
+      case 'genre': say('género', 1500); changeGenre(c.id); break;
+      case 'search': say('buscando "' + c.q + '"', 2500); playQuery(c.q); break;
+      case 'track': say(c.kind === 'podcast' ? 'podcast' : 'canción', 2000); playTrackOnce(c.track, c.kind); break;
       case 'volume': if (c.set !== undefined) setVolumeValue(c.set); else nudgeVolume(c.delta); break;
       case 'mute': toggleMute(); break;
       case 'mode': setMode(c.mode); break;
@@ -585,8 +593,18 @@
       default: break;
     }
   }
+  /* Interfaz para /panel (mismo origen): órdenes directas y el estado con la misma forma que /api/state. */
+  window.__player = {
+    handleCommand,
+    getState() {
+      const cur = state.current;
+      return { players: 1, blocked: !$('start').hidden, paused: media.paused, muted: media.muted || Number(vol.value) === 0, volume: Number(vol.value), mode: state.mode,
+        time: media.currentTime, track: cur && cur.track, genre: cur && cur.genre };
+    }
+  };
+
   function connectEvents() {
-    if (!window.EventSource) return;
+    if (LOCAL || !window.EventSource) return;
     const es = new EventSource(withT('/api/events')); /* se reconecta solo */
     es.onmessage = (e) => { try { handleCommand(JSON.parse(e.data)); } catch (_) { /* orden mal formada */ } };
   }
@@ -712,7 +730,7 @@
     if (startMode === 'video') { state.mode = 'video'; setMode('video'); }
     try { state.genres = await getJson('/api/genres'); buildChips(); } catch (_) { /* el selector quedará vacío */ }
     connectEvents();
-    loadInfo();
+    if (!LOCAL) loadInfo();
     advance();
   }
   init();

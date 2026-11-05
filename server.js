@@ -39,7 +39,8 @@ const server = createServer({
   podcasts: createPodcasts({ dir: DATA_DIR }),
   /* episodios: de 5 min a 4 h */
   episodes: (q, n) => ytdlp.search(episodeQuery(q), n, { minSec: 300 }),
-  token: TOKEN
+  token: TOKEN,
+  panelOpen: process.env.PANEL_PUBLICO !== '0' /* /panel no pide clave; PANEL_PUBLICO=0 lo cierra */
 });
 
 (async () => {

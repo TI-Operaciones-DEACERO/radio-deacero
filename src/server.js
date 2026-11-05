@@ -70,7 +70,10 @@ function localIps() {
   return out;
 }
 
-function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, token = '', trustLoopback = true }) {
+/* Id de sesión de un oyente independiente (/panel): lo inventa el navegador. */
+const SESSION_ID = /^[A-Za-z0-9_-]{8,40}$/;
+
+function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, token = '', trustLoopback = true, panelOpen = true }) {
   const publicList = genres.map(({ id, label, emoji, color, featured }) => ({ id, label, emoji, color, featured: !!featured }));
   const root = path.resolve(publicDir);
 
@@ -81,6 +84,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
 
   function serveStatic(pathname, res) {
     if (pathname === '/remote') pathname = '/remote.html'; /* control remoto */
+    if (pathname === '/panel' || pathname === '/panel/') pathname = '/remote.html'; /* mismo panel, pero reproduce en este navegador (remote.js lo decide por la ruta) */
     if (pathname === '/kiosco' || pathname === '/kiosco/') pathname = '/index.html'; /* misma página; la vista la elige app.js por la ruta */
     let rel;
     try { rel = decodeURIComponent(pathname); } catch { return json(res, 400, { error: 'URL inválida' }); }
@@ -104,6 +108,18 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     if (trustLoopback && LOOPBACK.has(req.socket.remoteAddress)) return true;
     const given = req.headers['x-token'] || url.searchParams.get('t') || '';
     return safeEqual(given, token);
+  }
+
+  /* /panel (oyente que escucha en su propio navegador) NO pide clave. Solo se abre lo que ese oyente necesita:
+   * ver géneros, oír, carátulas, buscar/leer podcasts y /api/next CON id de sesión (su racha es suya y no toca la de las pantallas).
+   * Nada que mande órdenes a pantallas (/api/cmd, /api/events, /api/state) ni que muestre equipos (/api/clients, /api/history).
+   * panelOpen=false (PANEL_PUBLICO=0) lo vuelve a cerrar todo. */
+  function isListenerRequest(req, url) {
+    if (!panelOpen || req.method !== 'GET') return false;
+    const p = url.pathname;
+    if (p === '/api/genres' || p === '/api/podcast/search' || p === '/api/podcasts') return true;
+    if (p === '/api/next') return SESSION_ID.test(url.searchParams.get('sid') || '');
+    return /^\/api\/(play|thumb)\/[^/]+$/.test(p);
   }
 
   const genreIds = new Set(genres.map((g) => g.id));
@@ -201,8 +217,11 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     }
 
     if (p === '/api/next') {
+      if (q.has('sid') && !SESSION_ID.test(q.get('sid'))) return json(res, 400, { error: 'BAD_SESSION' });
       try {
-        const r = await radio.next({ genre: q.get('genre') || undefined, change: q.get('change') === '1', query: (q.get('q') || '').trim().slice(0, 100) || undefined });
+        const opts = { genre: q.get('genre') || undefined, change: q.get('change') === '1', query: (q.get('q') || '').trim().slice(0, 100) || undefined };
+        if (q.has('sid')) opts.session = q.get('sid'); /* sin sid: la sesión principal (las pantallas) */
+        const r = await radio.next(opts);
         ytdlp.resolve(r.track.id, 'audio').catch(() => {}); /* precalienta: el cliente lo pide enseguida */
         return json(res, 200, r);
       } catch (e) {
@@ -243,7 +262,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     const postOk = req.method === 'POST' && ['/api/cmd', '/api/state', '/api/podcasts'].includes(url.pathname);
     const delOk = req.method === 'DELETE' && (url.pathname.startsWith('/api/podcasts/') || url.pathname === '/api/history');
     if (req.method !== 'GET' && !postOk && !delOk) return json(res, 405, { error: 'Método no permitido' });
-    if (isApi && url.pathname !== '/api/health' && !authorized(req, url)) return json(res, 401, { error: 'UNAUTHORIZED' });
+    if (isApi && url.pathname !== '/api/health' && !isListenerRequest(req, url) && !authorized(req, url)) return json(res, 401, { error: 'UNAUTHORIZED' });
     const run = isApi ? api(req, res, url) : Promise.resolve(serveStatic(url.pathname, res));
     run.catch(() => { if (!res.headersSent) json(res, 500, { error: 'INTERNAL' }); else res.destroy(); });
   });
