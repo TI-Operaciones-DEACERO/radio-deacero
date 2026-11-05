@@ -21,8 +21,9 @@ const TOKEN = process.env.REMOTE_TOKEN || ''; /* clave para quien NO sea la prop
 
 const extraArgs = (process.env.YTDLP_EXTRA || '').split(/\s+/).filter(Boolean); /* p. ej. "--cookies /ruta/cookies.txt" */
 const ytdlp = createYtdlp({ extraArgs, ...(process.env.YTDLP_BIN ? { cmd: { cmd: process.env.YTDLP_BIN, extra: [] } } : {}) });
-const radio = createRadio({ genres, search: (q, n) => ytdlp.search(q, n) });
 const proxy = createProxy({ resolve: (id, mode) => ytdlp.resolve(id, mode), invalidate: (id) => ytdlp.invalidate(id) });
+/* El radio comprueba con el proxy que una canción se puede reproducir ANTES de ofrecerla (si no, la pantalla se queda en silencio y salta). */
+const radio = createRadio({ genres, search: (q, n) => ytdlp.search(q, n), probe: (id) => proxy.probe(id) });
 
 const timesync = createTimeSync(); /* hora real vía cabecera Date de HTTPS: la Pi puede tener el reloj atrasado */
 

@@ -122,3 +122,66 @@ test('allowHost por defecto solo acepta googlevideo.com', () => {
   assert.equal(isYoutubeCdn('googlevideo.com.evil.io'), false);
   assert.equal(isYoutubeCdn('127.0.0.1'), false);
 });
+
+/* probe: ¿se puede reproducir esta pista? (se usa ANTES de ofrecerla, para no entregar canciones que van a fallar) */
+async function withProbe(opts, fn) {
+  const cdn = await startCdn(opts.cdnHandler);
+  const resolved = [];
+  const invalidated = [];
+  const proxy = createProxy({
+    resolve: async (id, mode) => { resolved.push([id, mode]); if (opts.resolveError) throw new Error('no disponible'); return { url: `${cdn.base}/v`, duration: 1 }; },
+    invalidate: (id) => invalidated.push(id),
+    allowHost: opts.allowHost || (() => true),
+    ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {})
+  });
+  try { await fn({ proxy, cdn, resolved, invalidated }); }
+  finally { cdn.srv.close(); }
+}
+
+test('probe: true si el CDN responde y pide solo 1 byte', async () => {
+  await withProbe({}, async ({ proxy, cdn, resolved }) => {
+    assert.equal(await proxy.probe(ID), true);
+    assert.deepEqual(resolved, [[ID, 'audio']]);
+    assert.equal(cdn.seen[0].range, 'bytes=0-0');
+  });
+});
+
+test('probe: false si el CDN no se puede alcanzar (certificado, red)', async () => {
+  const fetchImpl = async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'CERT_NOT_YET_VALID' } }); };
+  await withProbe({ fetchImpl }, async ({ proxy }) => {
+    assert.equal(await proxy.probe(ID), false);
+  });
+});
+
+test('probe: false si no se puede resolver la pista', async () => {
+  await withProbe({ resolveError: true }, async ({ proxy, cdn }) => {
+    assert.equal(await proxy.probe(ID), false);
+    assert.equal(cdn.seen.length, 0);
+  });
+});
+
+test('probe: 403 invalida la URL y reintenta una vez', async () => {
+  await withProbe({ cdnHandler: (req, res, n) => { if (n === 1) { res.writeHead(403); res.end(); return true; } return false; } }, async ({ proxy, invalidated, resolved }) => {
+    assert.equal(await proxy.probe(ID), true);
+    assert.deepEqual(invalidated, [ID]);
+    assert.equal(resolved.length, 2);
+  });
+});
+
+test('probe: si el CDN sigue respondiendo 403 es false (sin reintentar sin fin)', async () => {
+  await withProbe({ cdnHandler: (req, res) => { res.writeHead(403); res.end(); return true; } }, async ({ proxy, resolved }) => {
+    assert.equal(await proxy.probe(ID), false);
+    assert.equal(resolved.length, 2);
+  });
+});
+
+test('probe: host no permitido → false y no se conecta; id inválido → false sin resolver', async () => {
+  await withProbe({ allowHost: () => false }, async ({ proxy, cdn }) => {
+    assert.equal(await proxy.probe(ID), false);
+    assert.equal(cdn.seen.length, 0);
+  });
+  await withProbe({}, async ({ proxy, resolved }) => {
+    assert.equal(await proxy.probe('corto'), false);
+    assert.equal(resolved.length, 0);
+  });
+});

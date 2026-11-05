@@ -209,7 +209,7 @@
       playItem(item);
       topUp();
     } catch (_) {
-      toast(opts.query ? 'No encontré resultados para esa búsqueda.' : 'No se encontró música para ese género. Prueba otro.');
+      toast(opts.query ? 'No encontré resultados que se puedan reproducir.' : 'No se encontró música para ese género. Prueba otro.');
     } finally { state.loading = false; setBusy(false); renderUpNext(); }
   }
   const changeGenre = (id) => switchTo(id ? { genre: id } : { change: true });

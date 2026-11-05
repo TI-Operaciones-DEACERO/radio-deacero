@@ -65,7 +65,27 @@ function createProxy({ resolve, invalidate, fetchImpl = fetch, allowHost = isYou
     }
   }
 
-  return { handle };
+  /* ¿Se puede reproducir esta pista? Resuelve y pide 1 byte al CDN, sin pasarlo a nadie. Sirve para NO ofrecer canciones que van a fallar
+   * (p. ej. certificados "aún no válidos" por un reloj atrasado, o un nodo que no responde). La URL queda en la caché de resolve. */
+  async function probe(id, mode = 'audio') {
+    if (!VIDEO_ID.test(id || '')) return false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { url } = await resolve(id, mode);
+        if (!allowHost(new URL(url).hostname)) return false;
+        const up = await fetchImpl(url, {
+          headers: { 'user-agent': UA, accept: '*/*', 'accept-encoding': 'identity', range: 'bytes=0-0' },
+          signal: AbortSignal.timeout(8000)
+        });
+        if (up.body) up.body.cancel().catch(() => {});
+        if ([403, 404, 410].includes(up.status) && attempt === 0) { invalidate(id); continue; }
+        return up.ok;
+      } catch { return false; }
+    }
+    return false;
+  }
+
+  return { handle, probe };
 }
 
 module.exports = { createProxy, isYoutubeCdn };

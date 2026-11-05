@@ -220,3 +220,72 @@ test('reutiliza el pool: no busca en cada canción', async () => {
   await take(radio, 5);
   assert.equal(searches, 1);
 });
+
+/* probe: antes de ofrecer una canción se comprueba que se puede reproducir */
+const fallaSiTerminaEn = (...fin) => async (id) => !fin.some((f) => id.endsWith(f));
+
+test('probe: la racha nunca entrega una canción que no se puede reproducir', async () => {
+  const probados = [];
+  const probe = async (id) => { probados.push(id); return !/-[0-4]$/.test(id); }; /* fallan las 5 primeras de cada consulta */
+  const radio = createRadio({ genres: mkGenres(4), search: mkEndlessSearch(), rng: seeded(3), probe });
+  const rs = await take(radio, 25);
+  assert.equal(rs.length, 25);
+  assert.ok(rs.every((r) => !/-[0-4]$/.test(r.track.id)), 'todas se pudieron reproducir');
+  assert.ok(probados.length > rs.length, 'se sondearon más de las que se entregaron');
+});
+
+test('probe: una búsqueda ofrece el siguiente resultado si el primero no se puede reproducir', async () => {
+  const search = async () => [{ id: 'x1', title: 'A', channel: 'C', duration: 200 }, { id: 'x2', title: 'B', channel: 'C', duration: 200 }, { id: 'x3', title: 'C', channel: 'C', duration: 200 }];
+  const radio = createRadio({ genres: mkGenres(3), search, rng: seeded(), probe: fallaSiTerminaEn('x1') });
+  const r = await radio.next({ query: 'algo' });
+  assert.equal(r.track.id, 'x2');
+});
+
+test('probe: si ningún resultado de la búsqueda se puede reproducir → NO_SOURCE y no se altera la racha', async () => {
+  const search = async (q) => (q === 'nada' ? [1, 2, 3, 4, 5].map((n) => ({ id: `m${n}`, title: 'M', channel: 'C', duration: 200 })) : mkEndlessSearch()(q));
+  const probe = async (id) => !id.startsWith('m');
+  const radio = createRadio({ genres: mkGenres(4), search, rng: seeded(6), probe, perGenre: [4, 4] });
+  const first = await radio.next();
+  await assert.rejects(radio.next({ query: 'nada' }), (e) => e.code === 'NO_SOURCE');
+  const after = await radio.next();
+  assert.equal(after.genre.id, first.genre.id, 'la racha sigue donde iba');
+  assert.equal(after.genreLeft, first.genreLeft - 1);
+});
+
+test('probe: no sondea más de 3 canciones por elección', async () => {
+  const probados = [];
+  const search = async () => Array.from({ length: 10 }, (_, i) => ({ id: `y${i}`, title: 'Y', channel: 'C', duration: 200 }));
+  const radio = createRadio({ genres: mkGenres(3), search, rng: seeded(), probe: async (id) => { probados.push(id); return false; } });
+  await assert.rejects(radio.next({ query: 'y' }), (e) => e.code === 'NO_SOURCE');
+  assert.equal(probados.length, 3);
+});
+
+test('probe: una canción que falló no se vuelve a sondear enseguida', async () => {
+  const llamadas = [];
+  const search = async () => [{ id: 'x1', title: 'A', channel: 'C', duration: 200 }, { id: 'x2', title: 'B', channel: 'C', duration: 200 }, { id: 'x3', title: 'C', channel: 'C', duration: 200 }];
+  const probe = async (id) => { llamadas.push(id); return id !== 'x1'; };
+  const radio = createRadio({ genres: mkGenres(3), search, rng: seeded(), probe });
+  assert.equal((await radio.next({ query: 'algo' })).track.id, 'x2');
+  assert.equal((await radio.next({ query: 'algo' })).track.id, 'x3');
+  assert.equal(llamadas.filter((i) => i === 'x1').length, 1, 'x1 solo se sondeó una vez');
+});
+
+test('probe: las que fallan se vuelven a intentar cuando pasa el tiempo (p. ej. se corrigió el reloj)', async () => {
+  let t = 1000;
+  const search = async () => [{ id: 'x1', title: 'A', channel: 'C', duration: 200 }, { id: 'x2', title: 'B', channel: 'C', duration: 200 }];
+  let sano = false;
+  const probe = async (id) => id !== 'x1' || sano;
+  const radio = createRadio({ genres: mkGenres(3), search, rng: seeded(), probe, now: () => t, badTtlMs: 60000 });
+  assert.equal((await radio.next({ query: 'a' })).track.id, 'x2');
+  sano = true; t += 61000;
+  assert.equal((await radio.next({ query: 'a' })).track.id, 'x1', 'ya se reintenta x1');
+});
+
+test('probe: en la rotación sondea hasta 6 canciones por elección y no se rinde con la mitad rotas', async () => {
+  const probados = [];
+  const search = async () => Array.from({ length: 10 }, (_, i) => ({ id: `z${i}`, title: 'Z', channel: 'C', duration: 200 }));
+  const radio = createRadio({ genres: mkGenres(1), search, rng: seeded(), perGenre: [4, 4], probe: async (id) => { probados.push(id); return Number(id.slice(1)) >= 5; } });
+  const r = await radio.next();
+  assert.ok(Number(r.track.id.slice(1)) >= 5);
+  assert.ok(probados.length <= 6, 'a lo más 6 sondeos en una elección');
+});
