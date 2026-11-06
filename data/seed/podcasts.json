@@ -1,0 +1,87 @@
+{
+ "madrugada": [
+  {
+   "titulo": "Historias para dormir",
+   "query": "historias para dormir relato tranquilo podcast",
+   "razon": "Voz suave para bajar el ritmo"
+  },
+  {
+   "titulo": "Meditación guiada",
+   "query": "meditación guiada para dormir en español",
+   "razon": "Para soltar el día"
+  },
+  {
+   "titulo": "Sonidos y relajación",
+   "query": "relajación profunda podcast en español",
+   "razon": "Calma a esta hora"
+  }
+ ],
+ "mañana": [
+  {
+   "titulo": "Noticias de la mañana",
+   "query": "resumen de noticias de hoy México podcast",
+   "razon": "Para ponerte al día"
+  },
+  {
+   "titulo": "Motivación para empezar",
+   "query": "podcast motivación mañana productividad en español",
+   "razon": "Arranca con ánimo"
+  },
+  {
+   "titulo": "Cultura general",
+   "query": "podcast cultura general curiosidades en español",
+   "razon": "Aprende algo nuevo"
+  }
+ ],
+ "mediodía": [
+  {
+   "titulo": "Historia en breve",
+   "query": "podcast historia de México episodio completo",
+   "razon": "Ideal para la hora de la comida"
+  },
+  {
+   "titulo": "Humor",
+   "query": "podcast comedia en español episodio",
+   "razon": "Una pausa ligera"
+  },
+  {
+   "titulo": "Ciencia y tecnología",
+   "query": "podcast ciencia y tecnología en español",
+   "razon": "Curiosidad a media jornada"
+  }
+ ],
+ "tarde": [
+  {
+   "titulo": "Productividad",
+   "query": "podcast productividad trabajo enfoque en español",
+   "razon": "Para el empuje de la tarde"
+  },
+  {
+   "titulo": "Negocios",
+   "query": "podcast negocios emprendimiento en español",
+   "razon": "Ideas para el trabajo"
+  },
+  {
+   "titulo": "Entrevistas",
+   "query": "podcast entrevistas largas en español",
+   "razon": "Conversaciones con calma"
+  }
+ ],
+ "noche": [
+  {
+   "titulo": "Misterio y crimen",
+   "query": "podcast misterio crimen real en español",
+   "razon": "Para cerrar el día"
+  },
+  {
+   "titulo": "Relatos",
+   "query": "podcast relatos y cuentos en español",
+   "razon": "Historias para la noche"
+  },
+  {
+   "titulo": "Meditación nocturna",
+   "query": "meditación guiada noche en español",
+   "razon": "Baja el ritmo"
+  }
+ ]
+}

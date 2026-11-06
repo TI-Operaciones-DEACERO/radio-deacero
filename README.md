@@ -3,36 +3,50 @@
 Reproductor local de música aleatoria. Cada 4–6 canciones salta a un género al azar
 (479 géneros; el azar usa los 79 destacados). Un género que pides a mano también dura una racha de 4–6 canciones y luego vuelve la rotación sola: nada se queda fijo horas. Controles grandes para pantalla táctil,
 modo solo audio / video, letra sincronizada, visualizador, **podcasts** y **control remoto** (comando `play` y web `/remote`).
-Sin base de datos, sin login, **sin dependencias de npm**: solo Node ≥ 18 y `yt-dlp`.
+El **panel completo** (`/panel`) suma Bienestar, recomendaciones con IA, favoritos con cuenta (solo número de nómina), búsqueda,
+letras/karaoke, sonidos de naturaleza, temas y **administración** de las pantallas (horario, anuncios, filtro, usuarios, diagnóstico).
+Sin base de datos, **sin dependencias de npm**: solo Node ≥ 18 y `yt-dlp`.
 
 ## Uso en tu PC
 
 ```bash
 pip install -U yt-dlp      # o el binario de yt-dlp en el PATH
 npm start                  # http://localhost:8000
-npm test                   # 162 pruebas, sin red
+npm test                   # ~500 pruebas, sin red
+node scripts/humo.js       # humo: arranca el servidor real con datos temporales y revisa todas las páginas (--navegador: también en Edge/Chromium sin ventana)
 ```
 
 | Variable | Defecto | Para qué |
 |---|---|---|
 | `PORT` | `8000` | Puerto (en Linux no puede ser < 1024 sin root) |
 | `HOST` | `127.0.0.1` | `0.0.0.0` para controlarlo desde otro equipo **de tu red** |
-| `DATA_DIR` | `./data` | Dónde se guardan los podcasts (`podcasts.json`) |
-| `REMOTE_TOKEN` | — | Clave para quien no sea la propia máquina (header `x-token` o `?t=`). **Defínela si `HOST=0.0.0.0`** |
+| `DATA_DIR` | `./data` | Datos (ver *Cuentas y datos*). **En producción, fuera de la carpeta de la app** |
+| `REMOTE_TOKEN` | — | Clave para quien no sea la propia máquina (header `x-token` o `?t=`). **Defínela si `HOST=0.0.0.0`**. Sin ella, la administración solo se abre desde la propia máquina |
 | `PANEL_PUBLICO` | `1` | `0` obliga a usar clave también en `/panel` (por defecto `/panel` no la pide; ver la sección de seguridad) |
+| `PANEL_PRINCIPAL` | `completo` | `simple` deja `/panel` como el panel de siempre (el completo sigue en `/panel/completo`) |
+| `PANEL_V2` | `1` | `0` apaga el panel completo |
+| `GEMINI_KEY` | — | Clave de Gemini (IA de pago). Sin ella, o si falla o se agota la cuota, responde el **motor local** sin avisar al oyente. Solo en `.env` o el entorno, nunca en el repo |
+| `GEMINI_MODEL` | `gemini-3.7-flash` | Modelo de Gemini |
+| `HOSTS_PERMITIDOS` | — | Nombres extra (separados por coma) con los que se puede entrar a cuenta/administración (anti DNS rebinding) |
+| `COOKIE_SECURE` | — | `true` si se sirve por HTTPS |
 | `YTDLP_BIN` | autodetectado | Ruta de yt-dlp si no está en el PATH |
 | `YTDLP_EXTRA` | — | Opciones extra, p. ej. `--cookies /ruta/cookies.txt` |
+
+Las variables pueden ir en un archivo `.env` junto a `server.js`. En `DATA_DIR/.env` (sobrevive a las actualizaciones) **solo** se aceptan `GEMINI_KEY`, `GEMINI_MODEL`,
+`REMOTE_TOKEN`, `HOSTS_PERMITIDOS`, `PANEL_V2`, `PANEL_PRINCIPAL`, `PANEL_PUBLICO` y `COOKIE_SECURE`; lo demás se ignora con un aviso al arrancar
+(esa carpeta la pueden escribir otros usuarios del equipo). Lo que ya esté en el entorno manda.
 
 `?vis=0` en la URL apaga el visualizador (por si la Pi va justa).
 `?mode=audio` (por defecto) o `?mode=video` fija el modo de arranque (en la vista `/kiosco` el defecto es video). El kiosco de la Pi usa `http://localhost:8000/?mode=audio` (solo música): Chromium se
 cierra a la fuerza y no siempre guarda el último modo elegido, así que el parámetro asegura cómo arranca tras cada reinicio.
 
-## Dos vistas
+## Vistas
 
 | Dirección | Vista |
 |---|---|
 | `/` | Reproductor normal: carátula o video a un lado, controles al otro. |
-| `/panel` | **El panel de `/remote`, pero la música suena en ESTE navegador y no pide clave** (búsqueda, géneros, podcasts, pausa, volumen…). No es una pantalla ni un control remoto: no recibe las órdenes de nadie, no manda las suyas a las demás pantallas y no pisa su estado. **Lleva su propia racha** (el navegador manda un id de sesión; el servidor guarda aparte el género, las canciones que le quedan y las últimas que sonaron; caduca a las 2 h sin uso y hay tope de 100 sesiones), así que elegir género o buscar aquí NO cambia lo que suena en `/` ni en `/kiosco`. Solo audio (sin video ni letra). Los navegadores no dejan sonar sin un toque: la primera vez aparece «Toca para empezar a escuchar». Sin clave se ocultan «Guardar podcast», quitar podcasts y la pestaña *Equipos*. |
+| `/panel` | **Panel completo** (ver abajo). Su pestaña *Radio* es el panel de siempre. Con `PANEL_PRINCIPAL=simple`, `/panel` vuelve a ser el de siempre. `/panel/completo` funciona igual (marcadores). |
+| `/panel/simple` | **El panel de `/remote`, pero la música suena en ESTE navegador y no pide clave** (búsqueda, géneros, podcasts, pausa, volumen…). No es una pantalla ni un control remoto: no recibe las órdenes de nadie, no manda las suyas a las demás pantallas y no pisa su estado. **Lleva su propia racha** (el navegador manda un id de sesión; el servidor guarda aparte el género, las canciones que le quedan y las últimas que sonaron; caduca a las 2 h sin uso y hay tope de 100 sesiones), así que elegir género o buscar aquí NO cambia lo que suena en `/` ni en `/kiosco`. Solo audio (sin video ni letra). Los navegadores no dejan sonar sin un toque: la primera vez aparece «Toca para empezar a escuchar». Sin clave se ocultan «Guardar podcast», quitar podcasts y la pestaña *Equipos*. |
 | `/kiosco` | **Vista kiosco, solo para ver**: el video de fondo a pantalla completa, difuminado (se distingue el video, sin detalle), y al frente la **hora en grande** (12 h con AM/PM, segundos y fecha), la canción y la que sigue. No tiene botones, barra de progreso, volumen, género ni dirección de control, y el teclado no hace nada: todo se maneja desde `/remote` (o `play`). Con `?mode=audio` el fondo es la carátula difuminada en vez del video. |
 
 El desenfoque no usa `filter: blur` (a 1080p hace tropezar a una Raspberry Pi): el video se dibuja en un mosaico de 96×54 px y el navegador lo escala a pantalla
@@ -43,6 +57,55 @@ delataría. El servidor calcula el desfase con la cabecera `Date` de las respues
 muestra la hora real (`GET /api/time`). No cambia el reloj del sistema (eso pide root); si no logra sincronizar, la vista usa el reloj local.
 
 Para que la Pi arranque en la vista kiosco: `~/DEACEROPLAY-lite/deploy/install-autostart.sh "http://localhost:8000/kiosco"` y reiniciar el kiosco.
+
+## Panel completo (`/panel`)
+
+Pestañas: **Radio** (el panel de siempre, con el motor de audio: nunca se quita, al cambiar de pestaña la música sigue), **Bienestar**, **Para ti**,
+**Favoritos**, **Buscar**, **Naturaleza** y **Administración** (solo aparece con acceso). Cada módulo pesado se descarga al abrir su vista.
+
+- **Cuenta (opcional):** se entra solo con el **número de nómina** (4–10 dígitos), sin contraseña; sin cuenta todo suena igual. La cuenta guarda Me gusta / No me gusta,
+  playlists, historial, tema y gustos. **Las cuentas no se pueden borrar desde la app** (se pueden descargar los datos propios); el administrador las desactiva.
+  Si existe `DATA_DIR/nominas-permitidas.txt` (una nómina por línea) solo esas entran; si no, entra cualquiera (el arranque lo avisa).
+- **No me gusta** de verdad: los géneros que alguien rechaza dejan de salir en *su* rotación (no en la de los demás).
+- **Para ti / IA:** recomendado ahora, hecho para ti, descubrir, artistas, podcasts y playlists. Usa **Gemini** si hay `GEMINI_KEY` (límite de 30/min y 1500/día,
+  cortacircuitos) y si no, o si falla, un motor **local** con semillas (`data/seed/`). El oyente no nota la diferencia salvo en la variedad.
+- **Bienestar (Viaje ISO):** eliges cómo estás (18 ánimos), a dónde quieres llegar (6), estilo, idioma, duración e intensidad; el plan va por 5 fases
+  de energía y al terminar **continúa** sin silencio. El viaje es de esa sesión: no cambia lo que suena en las pantallas ni a otros oyentes.
+- **Buscar:** lista de resultados; ▶ toca una vez y luego sigue la radio.
+- **Letra y Karaoke** a pantalla completa (sincronizada si lrclib la tiene; si no, desplazamiento proporcional estimado).
+- **Naturaleza:** lluvia, olas, viento, bosque, ruido rosa y marrón **sintetizados** en el navegador (sin archivos ni red), mezclables, con suavizado, espacio y temporizador.
+- **Visualizador** (8 modos): animación **decorativa** (no analiza el audio: hacerlo exigiría tocar el `<audio>` del motor). Arranca quieto en equipos lentos y con «reducir movimiento».
+- **6 temas** (oscuro, claro, alto contraste, brasa, océano, bosque), todos AA; con cuenta se recuerdan en otros equipos.
+- **Atajos:** espacio, `N` siguiente, `L` letra, `K` karaoke, `/` buscar, `1`–`9` pestañas, `?` ayuda (se pueden apagar en la ayuda).
+- No hay ecualizador ni crossfade sobre la música, por la misma razón que el visualizador.
+
+## Administración (pestaña o `/api/admin/*`)
+
+Con `REMOTE_TOKEN` hace falta la clave (`?t=CLAVE` una vez, o pegarla en *Apariencia*); sin `REMOTE_TOKEN`, **solo desde la propia máquina**.
+Todo afecta a las **pantallas** (`/` y `/kiosco`), nunca a quien escucha en el panel.
+
+- **Horario:** *rotación* (como siempre), *horario* (bloques por días y franja con sus géneros; fuera de los bloques, rotación normal) o *musicoterapia 24/7*
+  (el ánimo sale de la hora dentro de la jornada, por defecto 7–19 h: calma → foco → ánimo a la comida → foco → energía por la tarde → bajar). **Generar semana** propone
+  hasta 8 bloques de lunes a viernes (con un género latino al mediodía) para editarlos antes de guardar. Un género pedido a mano desde `/remote` se respeta su racha.
+- **Anuncios:** `.mp3` de hasta 5 MB (se comprueba el encabezado, no la extensión), por días, franja e intervalo (o una vez al día). El **servidor** es el único reloj:
+  los manda por SSE y la pantalla baja la música mientras suena. Suena una vez por franja y solo en sus primeros 5 min (tras un reinicio no suena a deshora). *Probar* lo lanza ya.
+- **Ajustes:** filtro de contenido explícito (apagado por defecto). Descarta títulos con *explicit, sin censura, uncensored, nsfw, +18…* y las palabras que agregues.
+  **No es infalible:** `yt-dlp` no tiene el *safeSearch* de la API oficial.
+- **Usuarios:** lista, activar / desactivar (desactivar cierra sus sesiones).
+- **Diagnóstico:** errores y avisos recientes por servicio (yt-dlp, Gemini, radio, servidor) y estado del sistema. En memoria, sin claves.
+
+## Cuentas y datos (`DATA_DIR`)
+
+| Archivo | Qué |
+|---|---|
+| `users.json`, `sessions.json`, `users/<id>.json` | cuentas, sesiones (solo el hash del token) y la biblioteca de cada cuenta |
+| `nominas-permitidas.txt` | lista opcional de nóminas que pueden entrar |
+| `horario.json`, `ajustes.json`, `anuncios.json`, `anuncios/*.mp3` | administración |
+| `podcasts.json`, `history.json` | podcasts guardados e historial de búsquedas |
+| `.env` | claves (`GEMINI_KEY`…) que sobreviven a las actualizaciones |
+
+Nada de esto se versiona (`.gitignore`). **Respaldo:** `node scripts/respaldo.js respaldar [destino]` (copia con fecha) y, con el servidor detenido,
+`node scripts/respaldo.js restaurar <carpeta>` (lo que había se aparta, no se borra). Los respaldos tienen datos personales.
 
 ## Controles en pantalla
 
@@ -117,7 +180,18 @@ servidor (el estado del radio —género y recientes— es uno solo). Está pens
 | `GET /api/history?limit=`, `DELETE /api/history` | historial de búsquedas |
 | cabeceras `x-user` (usuario, codificado) y `x-client-time` (hora real) | las manda `play` (la web solo manda la hora); el servidor las usa para Equipos e historial |
 | `GET /api/search?q=` | géneros que coinciden |
-| `GET /api/events` | flujo SSE de órdenes (lo usa la pantalla) |
+| `GET /api/events` | flujo SSE de órdenes (lo usa la pantalla); también `{cmd:'anuncio',id,nombre}` |
+| `GET /api/buscar?q=&sid=` · `GET /api/lyrics?…&sid=` | búsqueda con lista y letras para el oyente del panel (con su id de sesión) |
+| `/api/auth/login\|logout\|me\|profile\|export` | cuenta por nómina (cookie `pl_user`, HttpOnly, 7 días) |
+| `/api/me/reactions\|playlists\|history\|taste\|prefs` | biblioteca de MI cuenta |
+| `/api/ia/ahora\|para-ti\|descubrir\|artistas\|podcasts\|playlist` | recomendaciones (Gemini o local) |
+| `GET /api/bienestar/opciones`, `POST\|DELETE /api/bienestar/viaje?sid=` | Bienestar |
+| `/api/admin/estado\|horario\|horario/generar\|horario/ahora\|anuncios\|ajustes\|diagnostico\|usuarios` | administración (clave) |
+| `GET /api/anuncio/:id` | audio de un anuncio (lo pide la pantalla) |
+
+Qué ruta existe y quién puede usarla está en **una sola tabla**, `src/policy.js` (nivel `publico`, `oyente`, `usuario` o `clave`, métodos y tope de cuerpo);
+lo que no está ahí responde 405/404. Las escrituras exigen que `Origin` coincida con `Host` y cuerpo JSON. Hay límites de ritmo en entrar, `/api/next`,
+búsquedas, letras, IA y escrituras de la biblioteca.
 
 Con `REMOTE_TOKEN` definido, todo `/api/*` (salvo `/api/health`) exige la clave a los clientes remotos; la propia Pi (loopback) no. **Excepción para `/panel`** (solo `GET`): `/api/genres`, `/api/play/*`, `/api/thumb/*`, `/api/podcast/search`, `/api/podcasts` (leer) y `/api/next` **únicamente con `?sid=` válido** (8–40 caracteres `A-Za-z0-9_-`). Siguen exigiendo clave todo lo que manda órdenes a pantallas (`/api/cmd`, `/api/events`, `/api/state`), lo que muestra equipos (`/api/clients`, `/api/history`), guardar o quitar podcasts y `/api/next` sin `sid` (la racha de las pantallas). Riesgo asumido: cualquiera que alcance el puerto puede oír música por el servidor (gasta su ancho de banda y yt-dlp). `PANEL_PUBLICO=0` cierra esa excepción.
 
@@ -150,8 +224,9 @@ La solución definitiva es una **reserva DHCP** en el router (pide a quien admin
 
 **Actualizar la app** (desde el PC, en la carpeta del proyecto):
 ```bash
-tar --exclude=.git --exclude=test --exclude=docs -cf - . | ssh admin@IP 'tar -xmf - -C ~/DEACEROPLAY-lite' && ssh admin@IP 'systemctl --user restart play-lite'
+tar --exclude=.git --exclude=test --exclude=docs --exclude=./.env --exclude=./respaldos --exclude=./data/users --exclude=./data/anuncios $(for f in users sessions horario ajustes anuncios podcasts history; do printf -- '--exclude=./data/%s.json ' $f; done) --exclude=./data/nominas-permitidas.txt -cf - . | ssh admin@IP 'tar -xmf - -C ~/DEACEROPLAY-lite' && ssh admin@IP 'systemctl --user restart play-lite'
 ```
+(Los datos de la Pi viven en `~/.local/share/play-lite` y no se tocan; la clave de Gemini va en `~/.config/play-lite.env` como `GEMINI_KEY=…`.)
 **Actualizar yt-dlp** (la Pi no puede bajarlo; si las pistas dejan de sonar suele ser esto). En el PC: `pip install -U yt-dlp`, y
 ```bash
 cd "$(python -c 'import yt_dlp,os;print(os.path.dirname(os.path.dirname(yt_dlp.__file__)))')"
@@ -220,7 +295,13 @@ src/clients.js       equipos conectados  src/podcasts.js podcasts guardados
 src/timesync.js      hora real (HTTPS)
 src/history.js       historial           src/jsonfile.js JSON en disco (atómico)
 src/lyrics.js        letras             src/thumb.js    carátulas
-public/              interfaz (HTML + CSS + JS, sin build): index.html (pantalla), remote.html (control)
+src/policy.js        tabla de rutas/permisos     src/http.js  cuerpo, cookies, origen, Host
+src/users.js, sessions.js, authroutes.js   cuenta por nómina       src/library.js, meroutes.js  favoritos
+src/gemini.js, ia/, iaroutes.js            IA (Gemini + local)     src/bienestar.js, bienestarroutes.js  Viaje ISO
+src/horario.js, anuncios.js, ajustes.js, diagnostico.js, adminroutes.js   administración     src/env.js  lector de .env
+public/              interfaz (HTML + CSS + JS, sin build): index.html (pantalla), remote.html (control y panel simple), panel-completo.html + js/panel/
+scripts/             humo.js (prueba de humo), respaldo.js (copia/restauración de DATA_DIR), enriquecer-generos.js
+data/seed/           artistas y podcasts semilla del motor local de IA
 deploy/              play (CLI), start/stop-kiosk.sh, install-autostart.sh, play-lite.user.service (Raspberry Pi)
 MENU.cmd, LEEME.txt   menú y pasos para Windows
 deploy/windows/      install, iniciar, detener, estado, uninstall (.ps1) y run-server/run-kiosk (PC con Windows)
@@ -233,7 +314,9 @@ data/genres.json     479 géneros        test/           node:test
 - Se rompe de vez en cuando cuando YouTube cambia algo: actualizar `yt-dlp` suele arreglarlo.
 - Cada búsqueda tarda ~4–6 s y resolver una pista ~5 s en la Pi; el cliente precarga 2 pistas. Cambiar a un género nuevo
   puede tardar unos segundos y la pantalla muestra "Buscando música…".
-- Un solo oyente: el estado del radio (género, historial reciente) vive en el servidor.
+- El radio de las **pantallas** es uno solo (género, historial reciente en el servidor); cada oyente del panel lleva su propia racha (hasta 100 sesiones).
+  Pensado para ~5 oyentes a la vez: cada uno es un flujo de audio por el servidor. **No se ha medido** en la Pi con 3, 5 o 10 oyentes.
+- Sin `GEMINI_KEY` (o con la cuota agotada) las recomendaciones salen de listas locales: más repetitivas que con Gemini.
 - Los episodios de podcast salen de la búsqueda normal de YouTube con "podcast" añadido (5 min – 4 h); no se puede garantizar el orden por fecha
   (`yt-dlp` ya no soporta `ytsearchdate`). Un episodio puede durar horas: *siguiente* lo salta.
 - Si la red bloquea NTP, la hora de la Pi puede ir atrasada (no tiene reloj de hardware).

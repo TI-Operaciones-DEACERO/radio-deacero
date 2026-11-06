@@ -50,6 +50,25 @@
     el.appendChild(img);
   }
 
+  /* Lista para la orden 'queue' (/panel/completo): conserva solo lo reproducible, con campos acotados y un tope.
+     { track:{id,title,channel,duration} } = canción conocida · { q } = consulta que se resuelve con la búsqueda. */
+  var QUEUE_MAX = 200;
+  function cleanQueueItems(items) {
+    var out = [];
+    if (!Array.isArray(items)) return out;
+    for (var i = 0; i < items.length && out.length < QUEUE_MAX; i++) {
+      var it = items[i];
+      if (!it || typeof it !== 'object') continue;
+      var t = it.track;
+      if (t && typeof t === 'object' && typeof t.id === 'string' && /^[A-Za-z0-9_-]{11}$/.test(t.id) && typeof t.title === 'string' && t.title.trim()) {
+        out.push({ track: { id: t.id, title: t.title.trim().slice(0, 300), channel: typeof t.channel === 'string' ? t.channel.slice(0, 200) : '', duration: Number.isFinite(t.duration) && t.duration >= 0 ? t.duration : 0 } });
+      } else if (typeof it.q === 'string' && it.q.trim()) {
+        out.push({ q: it.q.trim().slice(0, 100) });
+      }
+    }
+    return out;
+  }
+
   /* Reloj del kiosco: hora de 24 h y fecha en español. */
   var DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   var MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -90,7 +109,7 @@
     return new Date(ms).getMinutes() % everyMin === 0 ? Math.floor(ms / 60000) : null;
   }
 
-  var api = { clockParts: clockParts, spokenTime: spokenTime, announceSlot: announceSlot, fmtTime: fmtTime, activeLine: activeLine, createHistory: createHistory, emojiSrc: emojiSrc, setEmoji: setEmoji };
+  var api = { clockParts: clockParts, spokenTime: spokenTime, announceSlot: announceSlot, fmtTime: fmtTime, activeLine: activeLine, createHistory: createHistory, emojiSrc: emojiSrc, setEmoji: setEmoji, cleanQueueItems: cleanQueueItems };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Util = api;
 })(typeof window !== 'undefined' ? window : globalThis);

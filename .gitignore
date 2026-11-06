@@ -1,8 +1,13 @@
 # dependencias y datos de ejecución
 node_modules/
-data/podcasts.json
-data/history.json
+# Todo lo que se guarda en data/ en ejecución (cuentas, sesiones, historial, audios) es PERSONAL: no se versiona.
+# Solo se versionan los géneros y las semillas.
+data/*
+!data/genres.json
+!data/seed/
 *.tmp
+# respaldos de DATA_DIR (scripts/respaldo.js): datos personales
+respaldos/
 
 # secretos
 .env

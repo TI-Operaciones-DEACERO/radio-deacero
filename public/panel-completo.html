@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>DEACERO Play · Panel</title>
+<!-- Las rutas son absolutas: la página se sirve en /panel/completo y las relativas caerían en /panel/. -->
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/panel-completo.css">
+<!-- El tema guardado se aplica antes de pintar (sin parpadeo). -->
+<script src="/js/panel/temas.js"></script>
+</head>
+<body>
+<a class="skip" href="#vista">Saltar al contenido</a>
+<a class="skip" id="skipAhora" href="#ahora" hidden>Ir a controles de la canción</a>
+
+<!-- Iconos del reproductor (dibujados, sin fuente de emoji: la Raspberry no la trae) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h4v14H6zM14 5h4v14h-4z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path fill="currentColor" d="M6 5v14l9-7zM16 5h2.5v14H16z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-letra" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 6h16M4 11h16M4 16h10"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.4 2.7 6.2 6 6.7V21h2v-3.3c3.3-.5 6-3.3 6-6.7z"/></symbol>
+  <symbol id="i-vis" viewBox="0 0 24 24"><path fill="currentColor" d="M3 14h3v6H3zM8 8h3v12H8zM13 11h3v9h-3zM18 4h3v16h-3z"/></symbol>
+  <symbol id="i-mas" viewBox="0 0 24 24"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-tema" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2A4.5 4.5 0 0 0 21 10.8C21 6.5 17 3 12 3zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="brand"><img src="/assets/favicon.svg" alt="" width="28" height="28"><span>DEACERO <em>PLAY</em></span></div>
+  <div class="top-acc">
+    <button type="button" class="ico ghost-ico" id="aparienciaBtn" aria-haspopup="dialog" aria-label="Apariencia y ajustes" title="Apariencia y ajustes"><svg width="22" height="22" aria-hidden="true"><use href="#i-tema"/></svg></button>
+    <button type="button" class="ico ghost-ico" id="ayudaBtn" aria-haspopup="dialog" aria-label="Atajos de teclado" title="Atajos de teclado (?)" aria-keyshortcuts="?"><span aria-hidden="true" class="ico-txt">?</span></button>
+    <button type="button" class="acct" id="acctBtn" aria-haspopup="dialog">Entrar</button>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Secciones">
+  <div role="tablist" aria-label="Secciones del panel" id="tabs" class="tablist">
+    <button type="button" class="tab" role="tab" id="tab-radio" aria-selected="true" aria-controls="p-radio" data-vista="radio">Radio</button>
+    <button type="button" class="tab" role="tab" id="tab-buscar" aria-selected="false" aria-controls="p-buscar" tabindex="-1" data-vista="buscar">Buscar</button>
+    <button type="button" class="tab" role="tab" id="tab-bienestar" aria-selected="false" aria-controls="p-bienestar" tabindex="-1" data-vista="bienestar">Bienestar</button>
+    <button type="button" class="tab" role="tab" id="tab-parati" aria-selected="false" aria-controls="p-parati" tabindex="-1" data-vista="parati">Para ti</button>
+    <button type="button" class="tab" role="tab" id="tab-favoritos" aria-selected="false" aria-controls="p-favoritos" tabindex="-1" data-vista="favoritos">Favoritos</button>
+    <button type="button" class="tab" role="tab" id="tab-naturaleza" aria-selected="false" aria-controls="p-naturaleza" tabindex="-1" data-vista="naturaleza">Naturaleza</button>
+    <!-- Solo aparece si GET /api/admin/estado responde 200 (la propia máquina o con la clave) -->
+    <button type="button" class="tab" role="tab" id="tab-admin" aria-selected="false" aria-controls="p-admin" tabindex="-1" data-vista="admin" hidden>Administración</button>
+  </div>
+</nav>
+
+<main id="vista" tabindex="-1">
+  <!-- Radio: el panel de siempre (/panel/simple, que existe siempre) con el motor de audio. Nunca se quita: al cambiar de pestaña solo se esconde y la música sigue. -->
+  <section class="pnl radio-pnl" id="p-radio" role="tabpanel" aria-labelledby="tab-radio">
+    <iframe id="radio" class="radio" src="/panel/simple" title="Reproductor de radio"></iframe>
+  </section>
+  <section class="pnl" id="p-buscar" role="tabpanel" aria-labelledby="tab-buscar" tabindex="0" hidden></section>
+  <section class="pnl" id="p-bienestar" role="tabpanel" aria-labelledby="tab-bienestar" tabindex="0" hidden></section>
+  <section class="pnl" id="p-parati" role="tabpanel" aria-labelledby="tab-parati" tabindex="0" hidden></section>
+  <section class="pnl" id="p-favoritos" role="tabpanel" aria-labelledby="tab-favoritos" tabindex="0" hidden></section>
+  <section class="pnl" id="p-naturaleza" role="tabpanel" aria-labelledby="tab-naturaleza" tabindex="0" hidden></section>
+  <section class="pnl" id="p-admin" role="tabpanel" aria-labelledby="tab-admin" tabindex="0" hidden></section>
+</main>
+
+<!-- Avisos (los lectores de pantalla los leen) -->
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Ahora suena: título, canal, género y los botones de siempre. Solo se ve cuando hay una canción. -->
+<section class="ahora" id="ahora" aria-label="Ahora suena" tabindex="-1" hidden>
+  <div class="ahora-info">
+    <p class="ahora-titulo" id="aTitulo"></p>
+    <p class="ahora-sub"><span id="aCanal"></span><span id="aGenero" class="ahora-gen"></span></p>
+    <p class="ahora-lista" id="aLista" hidden><span id="aListaTxt"></span> <button type="button" class="link" id="aSalirLista">Salir de la lista</button></p>
+  </div>
+  <div class="ahora-ctl" role="group" aria-label="Controles de la canción">
+    <button type="button" class="ico" id="bLike" aria-pressed="false" aria-label="Me gusta" title="Me gusta"></button>
+    <button type="button" class="ico play" id="bPlay" aria-label="Pausar" title="Pausar (espacio)" aria-keyshortcuts="Space"><svg width="26" height="26" aria-hidden="true"><use id="bPlayUse" href="#i-pause"/></svg></button>
+    <button type="button" class="ico" id="bNext" aria-label="Siguiente" title="Siguiente (N)" aria-keyshortcuts="N"><svg width="26" height="26" aria-hidden="true"><use href="#i-next"/></svg></button>
+    <button type="button" class="ico mas" id="bMas" aria-expanded="false" aria-controls="ahoraExtra" aria-label="Más opciones" title="Más opciones"><svg width="24" height="24" aria-hidden="true"><use href="#i-mas"/></svg></button>
+    <!-- En pantallas de 600 px o menos, .ahora-extra se esconde tras «Más opciones» (barra compacta). Va DESPUÉS del botón en el
+         código para que el orden del foco siga al visual (WCAG 2.4.3): lo que se despliega queda justo después de «Más opciones». -->
+    <div class="ahora-extra" id="ahoraExtra">
+      <button type="button" class="ico" id="bDislike" aria-pressed="false" aria-label="No me gusta" title="No me gusta"></button>
+      <button type="button" class="ico" id="bAdd" aria-haspopup="dialog" aria-label="Agregar a una playlist" title="Agregar a una playlist"></button>
+      <button type="button" class="ico" id="bLetra" aria-haspopup="dialog" aria-label="Letra" title="Letra (L)" aria-keyshortcuts="L"><svg width="24" height="24" aria-hidden="true"><use href="#i-letra"/></svg></button>
+      <button type="button" class="ico" id="bKaraoke" aria-haspopup="dialog" aria-label="Karaoke" title="Karaoke (K)" aria-keyshortcuts="K"><svg width="24" height="24" aria-hidden="true"><use href="#i-mic"/></svg></button>
+      <button type="button" class="ico" id="bVisual" aria-haspopup="dialog" aria-label="Visualizador" title="Visualizador"><svg width="24" height="24" aria-hidden="true"><use href="#i-vis"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- Selector de playlist para el botón + -->
+<dialog id="pickPl" aria-labelledby="pickTitle">
+  <h2 id="pickTitle">Agregar a una playlist</h2>
+  <p class="hint" id="pickSong"></p>
+  <ul class="plist" id="pickList" aria-label="Tus playlists"></ul>
+  <p class="hint" id="pickVacio" hidden>Todavía no tienes playlists. Crea la primera:</p>
+  <form id="pickForm" novalidate>
+    <label for="pickNombre">Nueva playlist</label>
+    <input id="pickNombre" maxlength="60" autocomplete="off" placeholder="Nombre de la playlist">
+    <p class="err" id="pickErr" role="alert" hidden></p>
+    <div class="row">
+      <button type="button" class="ghost" id="pickCerrar">Cerrar</button>
+      <button type="submit" class="primary" id="pickCrear">Crear y agregar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="acct" aria-labelledby="acctTitle">
+  <form method="dialog" id="entrarForm" novalidate>
+    <h2 id="acctTitle">Entrar con tu nómina</h2>
+    <p class="hint">Sin contraseña. Tu nómina solo sirve para guardar tus favoritos y tus listas. Entrar es opcional: sin cuenta la música suena igual.</p>
+    <label for="nomina">Número de nómina</label>
+    <input id="nomina" name="nomina" inputmode="numeric" autocomplete="username" pattern="[0-9]{4,10}" maxlength="10" required>
+    <label for="nombre">Nombre <span class="opt">(opcional)</span></label>
+    <input id="nombre" name="nombre" autocomplete="nickname" maxlength="40">
+    <p class="err" id="err" role="alert" hidden></p>
+    <div class="row">
+      <button type="button" class="ghost" id="cancelar">Cancelar</button>
+      <button type="submit" class="primary" id="entrar">Entrar</button>
+    </div>
+  </form>
+  <section id="miCuenta" hidden>
+    <h2 id="miCuentaTitle">Mi cuenta</h2>
+    <p id="yo"></p>
+    <label for="nombre2">Nombre <span class="opt">(opcional)</span></label>
+    <input id="nombre2" maxlength="40" autocomplete="nickname">
+    <p class="err" id="err2" role="alert" hidden></p>
+    <div class="row">
+      <button type="button" class="ghost" id="cerrar">Cerrar</button>
+      <button type="button" class="primary" id="guardar">Guardar nombre</button>
+    </div>
+    <div class="row sub">
+      <a class="link" id="exportar" href="/api/auth/export" download="mis-datos-play.json">Descargar mis datos</a>
+      <button type="button" class="link" id="salir">Salir</button>
+    </div>
+  </section>
+</dialog>
+
+<!-- Apariencia: tema y acceso de administración -->
+<dialog id="apariencia" aria-labelledby="apTitle">
+  <h2 id="apTitle">Apariencia</h2>
+  <fieldset class="temas">
+    <legend>Tema</legend>
+    <div class="temas-grid" id="temasGrid"></div>
+  </fieldset>
+  <details class="pers" id="apAdmin">
+    <summary>¿Administras este equipo?</summary>
+    <form id="claveForm" novalidate>
+      <p class="hint">Pega la clave de administración (la del control remoto). Se guarda solo en este navegador y viaja únicamente en las peticiones de Administración.</p>
+      <label for="claveIn">Clave de administración</label>
+      <input id="claveIn" type="password" autocomplete="off" maxlength="200" spellcheck="false">
+      <p class="err" id="claveErr" role="alert" hidden></p>
+      <div class="row">
+        <button type="button" class="ghost" id="claveOlvidar" hidden>Olvidar clave</button>
+        <button type="submit" class="primary">Entrar a Administración</button>
+      </div>
+    </form>
+  </details>
+  <div class="row"><button type="button" class="ghost" id="apCerrar">Cerrar</button></div>
+</dialog>
+
+<!-- Ayuda: atajos de teclado -->
+<dialog id="ayuda" aria-labelledby="ayudaTitle">
+  <h2 id="ayudaTitle">Atajos de teclado</h2>
+  <p class="hint">Funcionan en todo el panel, salvo mientras escribes en un campo o cuando el foco está dentro del reproductor de la pestaña Radio.</p>
+  <dl class="atajos">
+    <dt><kbd>Espacio</kbd></dt><dd>Reproducir o pausar</dd>
+    <dt><kbd>N</kbd></dt><dd>Siguiente canción</dd>
+    <dt><kbd>L</kbd></dt><dd>Letra de lo que suena</dd>
+    <dt><kbd>K</kbd></dt><dd>Karaoke (letra grande)</dd>
+    <dt><kbd>/</kbd></dt><dd>Buscar</dd>
+    <dt><kbd>1</kbd> a <kbd>9</kbd></dt><dd>Ir a la pestaña con ese número</dd>
+    <dt><kbd>?</kbd></dt><dd>Esta ayuda</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Cerrar el cuadro abierto</dd>
+  </dl>
+  <!-- WCAG 2.1.4: los atajos de una sola tecla se pueden apagar (p. ej. para quien usa control por voz) -->
+  <label class="check" for="atajosOn"><input type="checkbox" id="atajosOn" checked aria-describedby="atajosNota"><span>Usar atajos de una sola tecla</span></label>
+  <p class="hint" id="atajosNota">Apagados, ninguna tecla suelta hace nada (tampoco <kbd>?</kbd>); esta ayuda se abre con el botón «?» (Atajos de teclado) de arriba.</p>
+  <div class="row"><button type="button" class="primary" id="ayudaCerrar">Entendido</button></div>
+</dialog>
+
+<script src="/js/util.js"></script>
+<script src="/js/panel/logica.js"></script>
+<script src="/js/panel/api.js"></script>
+<script src="/js/panel/nucleo.js"></script>
+<script src="/js/panel/cuenta.js"></script>
+</body>
+</html>

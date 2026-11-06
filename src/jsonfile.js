@@ -10,15 +10,15 @@ function readJson(file, fallback) {
 
 /* Escritura atómica (temporal + renombrar). Si el renombrado falla (Windows: antivirus/indexador,
  * EPERM) se escribe directo. Lanza si el disco no se puede escribir. */
-function writeJson(file, data) {
+function writeJson(file, data, mode, indent = 2) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = file + '.tmp';
-  const text = JSON.stringify(data, null, 2);
-  fs.writeFileSync(tmp, text);
+  const text = JSON.stringify(data, null, indent || undefined);
+  fs.writeFileSync(tmp, text, mode ? { mode } : undefined);
   try {
     fs.renameSync(tmp, file);
   } catch (_) {
-    fs.writeFileSync(file, text);
+    fs.writeFileSync(file, text, mode ? { mode } : undefined);
     try { fs.unlinkSync(tmp); } catch (__) { /* ya no está */ }
   }
 }

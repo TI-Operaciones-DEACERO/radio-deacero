@@ -7,6 +7,14 @@ const crypto = require('node:crypto');
 const os = require('node:os');
 const { validateCommand, searchGenres } = require('./control');
 const { describeAgent, cleanIp, cleanUser } = require('./clients');
+const { readBody, sameOrigin, hostAllowed, ipKey } = require('./http');
+const policy = require('./policy');
+const { createAuthRoutes } = require('./authroutes');
+const { createLimiter } = require('./ratelimit');
+const { createMeRoutes } = require('./meroutes');
+const { createIaRoutes } = require('./iaroutes');
+const { createBienestarRoutes } = require('./bienestarroutes');
+const { createAdminRoutes } = require('./adminroutes');
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const MIME = {
@@ -15,8 +23,12 @@ const MIME = {
   '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon'
 };
 
+/* nosniff: el navegador no adivina tipos; SAMEORIGIN: solo este mismo sitio puede enmarcar páginas (el panel nuevo enmarca /panel). */
+const SEC_HEADERS = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'SAMEORIGIN' };
+/* El panel nuevo solo carga recursos de este mismo sitio (defensa en profundidad contra XSS). */
+const PANEL_CSP = "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'";
+
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-const BODY_LIMIT = 4096;
 
 const num = (x, min, max) => (Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : undefined);
 const str = (x, n) => (typeof x === 'string' ? x.slice(0, n) : undefined);
@@ -35,22 +47,6 @@ function sanitizeState(b) {
     track: t ? { id: VIDEO_ID.test(t.id) ? t.id : undefined, title: str(t.title, 300), channel: str(t.channel, 200), duration: num(t.duration, 0, 1e5) } : undefined,
     genre: g ? { id: str(g.id, 40), label: str(g.label, 80), emoji: str(g.emoji, 8), color: str(g.color, 20) } : undefined
   };
-}
-
-function readBody(req, limit = BODY_LIMIT) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    let tooBig = false;
-    req.on('data', (c) => {
-      size += c.length;
-      if (tooBig) return; /* se descarta el resto; el 413 sale ya y la conexión se cierra */
-      if (size > limit) { tooBig = true; reject(Object.assign(new Error('Cuerpo demasiado grande'), { status: 413 })); return; }
-      chunks.push(c);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
 }
 
 function safeEqual(a, b) {
@@ -73,18 +69,42 @@ function localIps() {
 /* Id de sesión de un oyente independiente (/panel): lo inventa el navegador. */
 const SESSION_ID = /^[A-Za-z0-9_-]{8,40}$/;
 
-function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, token = '', trustLoopback = true, panelOpen = true }) {
-  const publicList = genres.map(({ id, label, emoji, color, featured }) => ({ id, label, emoji, color, featured: !!featured }));
+function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, token = '', trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
+  const anotar = (servicio, nivel, msg) => { if (diag) diag.add(servicio, nivel, msg); };
+  const permite = (t) => (ajustes ? ajustes.permite(t) : true);
+  const admin = createAdminRoutes({
+    programa, anuncios, ajustes, diag, json: (...a) => json(...a),
+    sistema: () => ({
+      uptime: Math.round(process.uptime()),
+      ytdlp: ytdlp && ytdlp.version ? ytdlp.version() || null : null,
+      relojSincronizado: timesync ? !!timesync.info().synced : false,
+      gemini: ia && ia.gemini ? ia.gemini() : { enabled: false },
+      pantallas: control ? control.getScreens().length : 0,
+      sesionesRadio: radio && radio.sessionCount ? radio.sessionCount() : 0,
+      cuentas: users && users.list ? users.list().length : 0
+    })
+  });
+  /* Campos que ya salían + los nuevos (desc, mood, energy) solo si el género los trae. Las consultas de búsqueda nunca salen. */
+  const publicList = genres.map(({ id, label, emoji, color, featured, desc, mood, energy }) => ({ id, label, emoji, color, featured: !!featured, ...(desc !== undefined ? { desc } : {}), ...(mood !== undefined ? { mood } : {}), ...(energy !== undefined ? { energy } : {}) }));
+  const bienestar = radio && radio.startViaje ? createBienestarRoutes({ radio, genres, library, json: (...a) => json(...a), ...(bienestarMax ? { max: bienestarMax } : {}) }) : null;
+  const iaApi = ia ? createIaRoutes({ ia, library, clock: () => (timesync ? timesync.current() : Date.now()), json: (...a) => json(...a), ...(iaMax ? { max: iaMax } : {}), ...(iaGeminiMax ? { geminiMax: iaGeminiMax } : {}) }) : null;
+  const nextLimiter = createLimiter({ max: nextMax, windowMs: 60 * 1000 }); /* cada /api/next puede lanzar búsquedas en yt-dlp */
+  const me = library ? createMeRoutes({ library, json: (...a) => json(...a), ...(meMax ? { max: meMax } : {}) }) : null;
+  const auth = users && sessions ? createAuthRoutes({ users, sessions, library, json: (...a) => json(...a), cookieSecure, now, ...(loginMax ? { loginMax } : {}) }) : null;
   const root = path.resolve(publicDir);
 
   const json = (res, code, body, extra = {}) => {
-    res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...(code === 413 ? { connection: 'close' } : {}), ...extra });
+    res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...SEC_HEADERS, ...(code === 413 ? { connection: 'close' } : {}), ...extra });
     res.end(JSON.stringify(body));
   };
 
   function serveStatic(pathname, res) {
     if (pathname === '/remote') pathname = '/remote.html'; /* control remoto */
-    if (pathname === '/panel' || pathname === '/panel/') pathname = '/remote.html'; /* mismo panel, pero reproduce en este navegador (remote.js lo decide por la ruta) */
+    const completo = panelV2 && panelPrincipal === 'completo';
+    if (panelV2 && (pathname === '/panel/completo' || pathname === '/panel/completo/')) pathname = '/panel-completo.html'; /* panel completo (PANEL_V2) */
+    else if (completo && (pathname === '/panel' || pathname === '/panel/')) pathname = '/panel-completo.html'; /* Fase 8: /panel ES el panel completo */
+    /* El panel de siempre: reproduce en este navegador (remote.js lo decide por la ruta). Con el cambio de la Fase 8 vive en /panel/simple. */
+    if (pathname === '/panel' || pathname === '/panel/' || pathname === '/panel/simple' || pathname === '/panel/simple/') pathname = '/remote.html';
     if (pathname === '/kiosco' || pathname === '/kiosco/') pathname = '/index.html'; /* misma página; la vista la elige app.js por la ruta */
     let rel;
     try { rel = decodeURIComponent(pathname); } catch { return json(res, 400, { error: 'URL inválida' }); }
@@ -97,7 +117,9 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
       res.writeHead(200, {
         'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
         'content-length': st.size,
-        'cache-control': 'no-cache'
+        'cache-control': 'no-cache',
+        ...SEC_HEADERS,
+        ...(path.basename(file) === 'panel-completo.html' ? { 'content-security-policy': PANEL_CSP } : {})
       });
       fs.createReadStream(file).pipe(res);
     });
@@ -110,16 +132,20 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     return safeEqual(given, token);
   }
 
-  /* /panel (oyente que escucha en su propio navegador) NO pide clave. Solo se abre lo que ese oyente necesita:
+  /* Administración de cuentas: sin REMOTE_TOKEN NO se abre a la red (el resto de rutas sí, como siempre); solo la propia máquina. */
+  function adminAuthorized(req, url) {
+    if (token) return authorized(req, url);
+    return trustLoopback && LOOPBACK.has(req.socket.remoteAddress);
+  }
+
+  /* /panel (oyente que escucha en su propio navegador) NO pide clave. Qué rutas son de oyente lo dice policy.js (nivel `oyente`):
    * ver géneros, oír, carátulas, buscar/leer podcasts y /api/next CON id de sesión (su racha es suya y no toca la de las pantallas).
    * Nada que mande órdenes a pantallas (/api/cmd, /api/events, /api/state) ni que muestre equipos (/api/clients, /api/history).
    * panelOpen=false (PANEL_PUBLICO=0) lo vuelve a cerrar todo. */
-  function isListenerRequest(req, url) {
-    if (!panelOpen || req.method !== 'GET') return false;
-    const p = url.pathname;
-    if (p === '/api/genres' || p === '/api/podcast/search' || p === '/api/podcasts') return true;
-    if (p === '/api/next') return SESSION_ID.test(url.searchParams.get('sid') || '');
-    return /^\/api\/(play|thumb)\/[^/]+$/.test(p);
+  function isListenerRequest(req, url, route) {
+    if (!panelOpen) return false; /* el método ya lo fijó la tabla de rutas */
+    if (route.needs === 'sid') return SESSION_ID.test(url.searchParams.get('sid') || '');
+    return true;
   }
 
   const genreIds = new Set(genres.map((g) => g.id));
@@ -133,11 +159,30 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     const q = url.searchParams;
     const ua = req.headers['user-agent'];
     const user = cleanUser(req.headers['x-user']);
+    const account = auth ? auth.currentUser(req) : null;
+    if (p.startsWith('/api/bienestar/')) return bienestar ? bienestar.handle(req, res, url, account) : json(res, 503, { error: 'BIENESTAR_NO_DISPONIBLE' });
+    if (p.startsWith('/api/ia/')) return iaApi ? iaApi.handle(req, res, url, account) : json(res, 404, { error: 'Endpoint no encontrado' });
+    if (p.startsWith('/api/me/')) return me && account ? me.handle(req, res, url, account) : json(res, 404, { error: 'Endpoint no encontrado' });
     const at = Number(req.headers['x-client-time']);
     if (isControlPath(p) && !(p === '/api/state' && req.method === 'POST')) clients.touch({ ip: req.socket.remoteAddress, ua, user });
     /* Historial de búsquedas: quién, desde dónde y cuándo (hora del cliente: la de la Pi puede estar atrasada). */
     const record = (kind, text) => history.add({ kind, text, user, ip: req.socket.remoteAddress, at });
 
+    const deCuentas = p.startsWith('/api/auth/') || p.startsWith('/api/admin/usuarios');
+    if (auth && deCuentas) return auth.handle(req, res, url, account);
+    if (deCuentas) return json(res, 404, { error: 'Endpoint no encontrado' });
+    if (p.startsWith('/api/admin/') || p.startsWith('/api/anuncio/')) return admin.handle(req, res, url);
+
+    if (p === '/api/buscar') {
+      const text = (q.get('q') || '').trim().slice(0, 100);
+      if (!text) return json(res, 400, { error: 'FALTA_Q' });
+      if (!q.has('sid')) record('song', text); /* las del oyente (con sid, sin clave) no entran al historial: lo podrían desplazar */
+      let found;
+      try { found = await ytdlp.search(text, 12); }
+      catch (e) { anotar('yt-dlp', 'error', 'búsqueda: ' + (e && e.message)); return json(res, 503, { error: 'SIN_CONEXION' }); }
+      return json(res, 200, (found || []).filter((t) => t && VIDEO_ID.test(t.id) && permite(t)).slice(0, 10)
+        .map((t) => ({ id: t.id, title: String(t.title || ''), channel: String(t.channel || ''), duration: Number(t.duration) || 0 })));
+    }
     if (p === '/api/health') return json(res, 200, { ok: true, ytdlp: ytdlp.version(), uptime: Math.round(process.uptime()), ips: localIps() });
     if (p === '/api/genres') return json(res, 200, publicList);
     if (p === '/api/time') { const i = timesync.info(); return json(res, 200, { now: timesync.current(), offset: i.offset, synced: i.synced }); }
@@ -221,12 +266,16 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
       try {
         const opts = { genre: q.get('genre') || undefined, change: q.get('change') === '1', query: (q.get('q') || '').trim().slice(0, 100) || undefined };
         if (q.has('sid')) opts.session = q.get('sid'); /* sin sid: la sesión principal (las pantallas) */
+        else if (programa) { const sel = programa.seleccion(); if (sel.generos.length) opts.onlyGenres = sel.generos; } /* horario: SOLO las pantallas */
+        const evitar = account && library ? library.avoidGenres(account.id) : [];
+        if (evitar.length) opts.avoidGenres = evitar; /* con cuenta: lo que no le gusta no sale en su rotación */
         const r = await radio.next(opts);
         ytdlp.resolve(r.track.id, 'audio').catch(() => {}); /* precalienta: el cliente lo pide enseguida */
         return json(res, 200, r);
       } catch (e) {
         if (e.code === 'UNKNOWN_GENRE') return json(res, 400, { error: e.code });
-        if (e.code === 'NO_SOURCE') return json(res, 503, { error: e.code });
+        if (e.code === 'NO_SOURCE') { anotar('radio', 'aviso', e.message); return json(res, 503, { error: e.code }); }
+        anotar('radio', 'error', e && e.message);
         return json(res, 500, { error: 'INTERNAL' });
       }
     }
@@ -247,9 +296,10 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     }
 
     if (p === '/api/lyrics') {
-      const title = (q.get('title') || '').trim();
+      /* Abierta al oyente: con tope de largo (salen a lrclib / lyrics.ovh y son la llave de la caché). */
+      const title = (q.get('title') || '').trim().slice(0, 200);
       if (!title) return json(res, 400, { error: 'Falta title' });
-      const r = await lyrics.get({ title, channel: q.get('channel') || '', duration: Number(q.get('duration')) || 0 });
+      const r = await lyrics.get({ title, channel: (q.get('channel') || '').slice(0, 200), duration: Number(q.get('duration')) || 0 });
       return r ? json(res, 200, r) : json(res, 404, { error: 'Sin letra' });
     }
 
@@ -257,14 +307,34 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
   }
 
   return http.createServer((req, res) => {
-    const url = new URL(req.url, 'http://localhost');
-    const isApi = url.pathname.startsWith('/api/');
-    const postOk = req.method === 'POST' && ['/api/cmd', '/api/state', '/api/podcasts'].includes(url.pathname);
-    const delOk = req.method === 'DELETE' && (url.pathname.startsWith('/api/podcasts/') || url.pathname === '/api/history');
-    if (req.method !== 'GET' && !postOk && !delOk) return json(res, 405, { error: 'Método no permitido' });
-    if (isApi && url.pathname !== '/api/health' && !isListenerRequest(req, url) && !authorized(req, url)) return json(res, 401, { error: 'UNAUTHORIZED' });
-    const run = isApi ? api(req, res, url) : Promise.resolve(serveStatic(url.pathname, res));
-    run.catch(() => { if (!res.headersSent) json(res, 500, { error: 'INTERNAL' }); else res.destroy(); });
+    let url;
+    try { url = new URL(req.url, 'http://localhost'); } catch { return json(res, 400, { error: 'URL inválida' }); }
+    const fail = (e) => { anotar('servidor', 'error', `${req.method} ${url.pathname}: ${e && e.message}`); if (!res.headersSent) json(res, 500, { error: 'INTERNAL' }); else res.destroy(); };
+    if (!url.pathname.startsWith('/api/')) {
+      if (req.method !== 'GET') return json(res, 405, { error: 'Método no permitido' });
+      return Promise.resolve(serveStatic(url.pathname, res)).catch(fail);
+    }
+    /* Desde la propia máquina solo se acepta Host propio (si no, una página de otro sitio podría usar la confianza de loopback: DNS rebinding). */
+    if (url.pathname !== '/api/health' && LOOPBACK.has(req.socket.remoteAddress) && !hostAllowed(req.headers.host, hostsPermitidos)) return json(res, 421, { error: 'HOST' });
+    const route = policy.resolve(req.method, url.pathname);
+    if (!route) {
+      /* Existe pero con otro método → 405; lo que no existe: 405 si no es GET, y si es GET pide clave antes de decir 404. */
+      if (req.method !== 'GET' || policy.pathExists(url.pathname)) return json(res, 405, { error: 'Método no permitido' });
+      /* Bajo /api/admin/ manda la regla de administración (sin REMOTE_TOKEN, solo la propia máquina). Y lo no declarado NO llega a
+       * ningún manejador (algunos atienden por prefijo): se responde 404 aquí mismo. */
+      if (!(url.pathname.startsWith('/api/admin/') ? adminAuthorized(req, url) : authorized(req, url))) return json(res, 401, { error: 'UNAUTHORIZED' });
+      return json(res, 404, { error: 'Endpoint no encontrado' });
+    }
+    if (/^\/api\/(auth|admin)\//.test(url.pathname) && !hostAllowed(req.headers.host, hostsPermitidos)) return json(res, 421, { error: 'HOST' });
+    if (req.method !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: 'ORIGIN' });
+    if (route.level === 'oyente' && !isListenerRequest(req, url, route) && !authorized(req, url)) return json(res, 401, { error: 'UNAUTHORIZED' });
+    if (route.level === 'clave' && !(url.pathname.startsWith('/api/admin/') ? adminAuthorized(req, url) : authorized(req, url))) return json(res, 401, { error: 'UNAUTHORIZED' });
+    if (route.level === 'usuario' && !(auth && auth.currentUser(req))) return json(res, 401, { error: 'NO_SESSION' });
+    if (url.pathname === '/api/next' || url.pathname === '/api/podcast/search' || url.pathname === '/api/buscar' || url.pathname === '/api/lyrics') {
+      const lim = nextLimiter.hit(ipKey(req.socket.remoteAddress));
+      if (!lim.ok) return json(res, 429, { error: 'DEMASIADAS_PETICIONES' }, { 'retry-after': String(lim.retryAfter) });
+    }
+    return api(req, res, url).catch(fail);
   });
 }
 

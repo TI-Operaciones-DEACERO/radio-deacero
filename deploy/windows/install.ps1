@@ -128,7 +128,8 @@ if (-not $ytOk) { Say 'AVISO: sin yt-dlp la app arranca pero no puede reproducir
 
 # ---------------------------------------------------------------- app
 Step 'Copiando la aplicacion'
-$null = robocopy $source (Join-Path $InstallDir 'app') /MIR /NFL /NDL /NJH /NJS /NP /XD .git test docs node_modules vendor /XF podcasts.json history.json .gitignore .gitattributes
+# Nunca se copian claves (.env) ni datos de personas de la carpeta de origen: viven en <InstallDir>\data (se conserva al actualizar; la clave de Gemini va en <InstallDir>\data\.env)
+$null = robocopy $source (Join-Path $InstallDir 'app') /MIR /NFL /NDL /NJH /NJS /NP /XD .git test docs node_modules vendor users anuncios respaldos /XF podcasts.json history.json users.json sessions.json horario.json ajustes.json anuncios.json nominas-permitidas.txt .env .gitignore .gitattributes
 if ($LASTEXITCODE -ge 8) { throw "robocopy fallo (codigo $LASTEXITCODE)" }
 Say "App copiada a $InstallDir\app"
 if ($isAdmin) {
@@ -154,7 +155,12 @@ if ($old) {
 }
 if (-not $Token) {
   if ($old -and $old.token) { $Token = $old.token }
-  elseif (-not $LocalOnly) { $Token = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 20 | ForEach-Object { [char]$_ }) }
+  elseif (-not $LocalOnly) {
+    # Generador criptografico (Get-Random no lo es): 24 caracteres alfanumericos (~140 bits)
+    $bytes = New-Object byte[] 24; $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($bytes); $rng.Dispose()
+    $abc = [char[]]'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    $Token = -join ($bytes | ForEach-Object { $abc[$_ % $abc.Length] })
+  }
 }
 $bind = '0.0.0.0'; if ($LocalOnly) { $bind = '127.0.0.1' }
 if (-not $PSBoundParameters.ContainsKey('NoKiosk') -and $old -and $old.kiosk -eq $false) { $NoKiosk = [switch]$true }

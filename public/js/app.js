@@ -28,6 +28,7 @@
     loading: false,
     failures: 0,
     toppingUp: false,
+    plan: null,         /* cola externa (orden 'queue' de /panel/completo): { items, i } o null */
     seeking: false,
     lyrics: { open: false, lines: null, idx: -1, timer: 0 }
   };
@@ -188,6 +189,7 @@
     state.loading = true;
     try {
       if (state.current) state.history.push(state.current);
+      if (state.plan) { setBusy(true); if (await playPlan(state.plan.i + 1)) return; } /* siguiente de la lista; al acabar, sigue la radio */
       if (!state.queue.length) setBusy(true);
       const item = state.queue.shift() || await fetchNextPatient();
       playItem(item);
@@ -196,6 +198,12 @@
   }
 
   function prev() {
+    if (state.plan) { /* dentro de una lista: reinicia la pista o vuelve a la anterior de la lista */
+      if (media.currentTime > 3 || state.plan.i === 0 || state.loading) { media.currentTime = 0; return; }
+      state.loading = true; setBusy(true);
+      playPlan(state.plan.i - 1).finally(() => { state.loading = false; setBusy(false); });
+      return;
+    }
     if (media.currentTime > 3 || state.history.size() === 0) { media.currentTime = 0; return; }
     const p = state.history.pop();
     if (state.current) state.queue.unshift(state.current);
@@ -231,6 +239,39 @@
     if (state.current) state.history.push(state.current);
     playItem({ track, genre: Object.assign({}, KIND_GENRE[kind] || KIND_GENRE.search), genreChanged: true });
     topUp();
+  }
+
+  /* Cola externa: reproduce la lista en orden (canciones conocidas o consultas que se resuelven con la búsqueda) y al terminar vuelve la radio.
+     No precarga la radio mientras dura. Termina con cualquier orden de género, búsqueda o pista suelta, o al mandar una lista vacía. */
+  const PLAN_GENRE = { id: 'lista', label: 'Mi lista', emoji: '🎵', color: '#F59B23' };
+  async function playPlan(from) {
+    const p = state.plan;
+    for (let i = from; p && i < p.items.length; i++) {
+      const it = p.items[i];
+      let item = null;
+      try { item = it.track ? { track: it.track, genre: Object.assign({}, PLAN_GENRE), genreChanged: true } : await fetchNext({ query: it.q }); } catch (_) { /* sin resultado: se salta */ }
+      if (state.plan !== p) return true; /* la cancelaron mientras se resolvía: ya no toca */
+      if (!item) continue;
+      p.i = i;
+      playItem(item);
+      return true;
+    }
+    if (state.plan === p) state.plan = null; /* se acabó la lista */
+    return false;
+  }
+  async function startPlan(rawItems, index) {
+    state.plan = null;
+    const items = U.cleanQueueItems(rawItems);
+    if (!items.length || state.loading) return;
+    state.loading = true;
+    setBusy(true);
+    try {
+      state.queue.length = 0;
+      if (state.current) state.history.push(state.current);
+      state.plan = { items, i: 0 };
+      const start = Number.isInteger(index) && index >= 0 && index < items.length ? index : 0;
+      if (!(await playPlan(start))) toast('No encontré nada que se pueda reproducir en esa lista.');
+    } finally { state.loading = false; setBusy(false); renderUpNext(); }
   }
 
   function toggle() { if (media.paused) startPlayback(); else media.pause(); }
@@ -575,6 +616,7 @@
   function handleCommand(c) {
     const say = (m, ms) => { if (!LOCAL) toast('Remoto · ' + m, ms); }; /* el aviso "Remoto ·" solo tiene sentido en una pantalla */
     if (CMD_LABEL[c.cmd]) say(CMD_LABEL[c.cmd], 1500);
+    if (c.cmd === 'genre' || c.cmd === 'search' || c.cmd === 'random' || c.cmd === 'track') state.plan = null; /* lo que se pide ahora cancela la lista */
     switch (c.cmd) {
       case 'toggle': toggle(); break;
       case 'play': startPlayback(); break;
@@ -585,11 +627,13 @@
       case 'genre': say('género', 1500); changeGenre(c.id); break;
       case 'search': say('buscando "' + c.q + '"', 2500); playQuery(c.q); break;
       case 'track': say(c.kind === 'podcast' ? 'podcast' : 'canción', 2000); playTrackOnce(c.track, c.kind); break;
+      case 'queue': startPlan(c.items, c.index); break;
       case 'volume': if (c.set !== undefined) setVolumeValue(c.set); else nudgeVolume(c.delta); break;
       case 'mute': toggleMute(); break;
       case 'mode': setMode(c.mode); break;
       case 'lyrics': $('btnLyrics').click(); break;
       case 'announce': announce(Date.now() + timeOffset, true); break;
+      case 'anuncio': anuncio(c.id); break; /* anuncio programado (Administración → Anuncios): solo pantallas */
       default: break;
     }
   }
@@ -599,7 +643,9 @@
     getState() {
       const cur = state.current;
       return { players: 1, blocked: !$('start').hidden, paused: media.paused, muted: media.muted || Number(vol.value) === 0, volume: Number(vol.value), mode: state.mode,
-        time: media.currentTime, track: cur && cur.track, genre: cur && cur.genre };
+        time: media.currentTime, track: cur && cur.track, genre: cur && cur.genre,
+        viaje: (cur && cur.viaje) || null, /* viaje de Bienestar de la pista que suena (lo trae /api/next) */
+        cola: state.plan ? { i: state.plan.i, total: state.plan.items.length } : null }; /* lista en curso (orden 'queue') */
     }
   };
 
@@ -644,15 +690,16 @@
       }, 40);
     });
   }
-  function playJingle() {
+  function playClip(src, maxMs) {
     return new Promise((resolve) => {
-      const a = new Audio('/assets/jingle.mp3');
+      const a = new Audio(src);
       a.volume = Math.max(0.4, Number(vol.value) / 100);
       a.addEventListener('ended', resolve); a.addEventListener('error', resolve);
-      setTimeout(resolve, 40000); /* por si nunca termina */
+      setTimeout(resolve, maxMs); /* por si nunca termina */
       a.play().catch(resolve);
     });
   }
+  const playJingle = () => playClip('/assets/jingle.mp3', 40000);
   function pickVoice() {
     const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
     return vs.find((v) => /^es[-_]MX/i.test(v.lang) && /natural|online/i.test(v.name)) || vs.find((v) => /^es[-_]MX/i.test(v.lang)) || vs.find((v) => /^es/i.test(v.lang)) || null;
@@ -672,6 +719,14 @@
     if (announcing || (!force && (media.paused || media.muted))) return;
     announcing = true;
     try { await fadeDuck(0.12, 600); await playJingle(); await wait(250); await speak(U.spokenTime(ms)); }
+    finally { await fadeDuck(1, 900); announcing = false; }
+  }
+  /* Anuncio programado: el servidor lo dispara por SSE a las pantallas ({ cmd:'anuncio', id }). El motor de /panel (oyente) no lo
+     reproduce. Mismo ducking que el locutor y sin encimarse: si ya suena uno (o el locutor), el nuevo se descarta. Máx. 6 min. */
+  async function anuncio(id) {
+    if (LOCAL || announcing || typeof id !== 'string' || !/^[a-f0-9]{8}$/.test(id)) return;
+    announcing = true;
+    try { await fadeDuck(0.12, 600); await playClip(withT('/api/anuncio/' + id), 6 * 60 * 1000); }
     finally { await fadeDuck(1, 900); announcing = false; }
   }
   if ('speechSynthesis' in window) speechSynthesis.getVoices(); /* las voces cargan en segundo plano */
@@ -731,7 +786,7 @@
     try { state.genres = await getJson('/api/genres'); buildChips(); } catch (_) { /* el selector quedará vacío */ }
     connectEvents();
     if (!LOCAL) loadInfo();
-    advance();
+    if (!state.current && !state.plan) advance(); /* si /panel ya mandó una orden mientras cargaban los géneros, no se pisa */
   }
   init();
 })();

@@ -29,6 +29,15 @@ const CANDIDATES = [
 const MAX_URL_TTL = 5 * 3600 * 1000;
 const URL_MARGIN = 60 * 1000;
 const MAX_CONCURRENT = 2;
+const MAX_WAITING = 20; /* peticiones en espera: más allá se rechaza (la cola no crece sin límite) */
+
+/* yt-dlp (y lo que haya en YTDLP_EXTRA) no necesita ni debe heredar las claves del servidor. */
+const SECRETO = /key|token|secret|passw|credential/i;
+function cleanEnv(env = process.env) {
+  const out = {};
+  for (const [k, v] of Object.entries(env)) if (!SECRETO.test(k)) out[k] = v;
+  return out;
+}
 const MAX_CACHE = 300;
 
 /* Las URLs de googlevideo traen su caducidad en `expire` (epoch, s). */
@@ -44,7 +53,7 @@ function ttlFromUrl(url, maxMs, now = Date.now()) {
 }
 
 /* extraArgs: opciones propias (p. ej. ['--cookies','cookies.txt'] si YouTube pide verificar que no eres un bot). */
-function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrency = MAX_CONCURRENT, extraArgs = [] } = {}) {
+function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrency = MAX_CONCURRENT, maxWaiting = MAX_WAITING, extraArgs = [] } = {}) {
   let current = cmd;
   let versionStr = null;
   const cache = new Map();     /* `${id}|${mode}` → { url, duration, expires } */
@@ -63,13 +72,14 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
 
   function run(args, timeoutMs = 25000) {
     if (!current) return Promise.reject(new Error('yt-dlp no disponible'));
+    if (active >= concurrency && waiting.length >= maxWaiting) return Promise.reject(new Error('yt-dlp: cola llena'));
     return slot().then(() => new Promise((resolve, reject) => {
       let out = '';
       let err = '';
       let settled = false;
       const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); release(); fn(v); } };
       let p;
-      try { p = spawn(current.cmd, [...current.extra, ...extraArgs, ...args]); }
+      try { p = spawn(current.cmd, [...current.extra, ...extraArgs, ...args], { env: cleanEnv() }); }
       catch (e) { release(); return reject(e); }
       const timer = setTimeout(() => { try { p.kill(); } catch { /* ya terminó */ } finish(reject, new Error('yt-dlp: tiempo agotado')); }, timeoutMs);
       p.stdout.on('data', (d) => { out += d; });
