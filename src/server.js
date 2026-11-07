@@ -69,7 +69,7 @@ function localIps() {
 /* Id de sesión de un oyente independiente (/panel): lo inventa el navegador. */
 const SESSION_ID = /^[A-Za-z0-9_-]{8,40}$/;
 
-function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, token = '', trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
+function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, onGenero, token = '', trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
   const anotar = (servicio, nivel, msg) => { if (diag) diag.add(servicio, nivel, msg); };
   const permite = (t) => (ajustes ? ajustes.permite(t) : true);
   const admin = createAdminRoutes({
@@ -271,6 +271,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
         if (evitar.length) opts.avoidGenres = evitar; /* con cuenta: lo que no le gusta no sale en su rotación */
         const r = await radio.next(opts);
         ytdlp.resolve(r.track.id, 'audio').catch(() => {}); /* precalienta: el cliente lo pide enseguida */
+        if (onGenero && r.genre && genreIds.has(r.genre.id)) { try { onGenero(r.genre.id); } catch (_) { /* solo es un aviso */ } }
         return json(res, 200, r);
       } catch (e) {
         if (e.code === 'UNKNOWN_GENRE') return json(res, 400, { error: e.code });

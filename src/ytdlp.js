@@ -157,7 +157,10 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
     for (const mode of Object.keys(FORMATS)) cache.delete(`${id}|${mode}`);
   }
 
-  return { detect, search, resolve, invalidate, version: () => versionStr, isReady: () => !!current };
+  /* ¿Ya está resuelta (y vigente) la URL de esta pista? Sin lanzar nada. */
+  const isResolved = (id, mode = 'audio') => { const h = cache.get(`${id}|${mode}`); return !!h && h.expires > now(); };
+
+  return { detect, search, resolve, invalidate, isResolved, version: () => versionStr, isReady: () => !!current };
 }
 
 module.exports = { createYtdlp, ttlFromUrl, VIDEO_ID };

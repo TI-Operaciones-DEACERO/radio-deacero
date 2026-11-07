@@ -6,7 +6,7 @@
   const LS_USOS = 'pl_animos_usos', LS_FAV = 'pl_bienestar_fav', SS_PLAN = 'pl_viaje_plan';
   const POR_OMISION = ['estresado', 'agotado', 'enfocado', 'tranquilo', 'motivado', 'contento']; /* los 6 de la vista rápida mientras no haya historial */
 
-  let raiz, ops = null, plan = null, detenido = false, visto = false, ocupado = false, firmaFases = '', fav = null;
+  let raiz, pendiente = '', ops = null, plan = null, detenido = false, visto = false, ocupado = false, firmaFases = '', fav = null;
   const sel = { estado: '', texto: '', destino: '', intensidad: 'media', duracion: 'media', estilo: 'ninguno', idioma: '' };
   const els = {};
 
@@ -22,7 +22,7 @@
     el.classList.add('vista-int');
     els.cuerpo = h('div');
     el.append(
-      (els.titulo = h('h1', { class: 'vt', text: 'Bienestar', tabindex: '-1' })),
+      (els.titulo = h('h2', { class: 'vt', text: 'Bienestar', tabindex: '-1' })), /* va dentro de Inicio (Radio), que ya tiene su h1 */
       (els.srFase = h('p', { class: 'sr-only', role: 'status' })), /* anuncia el cambio de fase; vive aquí para no recrearse */
       h('p', { class: 'hint', text: 'Cuéntanos cómo te sientes y armamos un viaje musical en 5 fases: empieza donde estás y te lleva poco a poco adonde quieres llegar.' }),
       els.cuerpo
@@ -47,6 +47,16 @@
     cargarFavorito();
     const g = planGuardado(); /* si se recargó la página con un viaje en marcha, se retoma */
     if (g) { plan = g; detenido = false; visto = false; pintarViaje(true); }
+    if (pendiente) { const a = pendiente; pendiente = ''; iniciarAnimo(a); }
+  }
+
+  /* «Bienestar rápido» de Inicio: el ánimo queda elegido y el viaje arranca con los valores de siempre. */
+  function iniciarAnimo(id) {
+    if (!ops) { pendiente = id; return; }
+    if (!animoPorId(id)) return;
+    sel.estado = id; sel.texto = ''; if (els.texto) els.texto.value = '';
+    marcarChips();
+    iniciar(L.armarPeticionViaje(sel));
   }
 
   function construir() {
@@ -225,7 +235,8 @@
     els.viaje.hidden = false;
     const s = P.estado();
     const ev = L.estadoViaje(plan, s && s.viaje);
-    vv.progreso.textContent = ev.activo ? L.resumenFase(ev) : 'Preparando la primera canción…';
+    const car = ev.activo && !ev.terminado ? P.R.etiquetaCaracter(plan.fases[ev.faseIdx] && plan.fases[ev.faseIdx].caracter) : '';
+    vv.progreso.textContent = ev.activo ? L.resumenFase(ev) + (car ? ' · Música: ' + car : '') : 'Preparando la primera canción…';
     vv.items.forEach((x, i) => {
       const actual = ev.activo && !ev.terminado && i === ev.faseIdx;
       const hecha = ev.activo && (ev.terminado || i < ev.faseIdx);
@@ -238,8 +249,14 @@
     const firma = [ev.activo, ev.faseIdx, ev.terminado].join('|');
     if (firma !== firmaFases) {
       firmaFases = firma;
-      if (ev.activo) els.srFase.textContent = ev.terminado ? 'Viaje completo: la música continúa en esta energía.' : 'Fase ' + (ev.faseIdx + 1) + ' de ' + ev.total + ': ' + ev.nombre + '.';
+      if (ev.activo) els.srFase.textContent = ev.terminado ? 'Viaje completo: la música continúa en esta energía.' : 'Fase ' + (ev.faseIdx + 1) + ' de ' + ev.total + ': ' + ev.nombre + (car ? ', música: ' + car : '') + '.';
     }
+  }
+
+  /* Carácter musical de la fase (Calma, Concentración, Buen ánimo…): la música va de la mano con el ánimo. */
+  function caracterEl(id) {
+    const t = P.R.etiquetaCaracter(id);
+    return t ? h('span', { class: 'caracter', text: 'Música: ' + t }) : null;
   }
 
   function faseItem(f, i) {
@@ -249,6 +266,7 @@
       h('div', { class: 'fase-cab' }, [
         h('span', { class: 'fase-n', 'aria-hidden': 'true', text: String(i + 1) }),
         h('strong', { text: 'Fase ' + (i + 1) + ': ' + f.nombre }),
+        caracterEl(f.caracter),
         estado
       ]),
       h('div', { class: 'energia' }, [
@@ -310,6 +328,8 @@
 
   P.vistas.bienestar = {
     montar,
-    mostrar() { if (plan) pintarViaje(true); }
+    mostrar() { if (plan) pintarViaje(true); },
+    iniciarAnimo,
+    enfocar() { if (els.titulo) els.titulo.focus(); }
   };
 })();

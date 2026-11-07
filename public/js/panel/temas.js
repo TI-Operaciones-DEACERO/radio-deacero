@@ -49,5 +49,7 @@
     return t;
   }
   aplicar(guardado());
+  /* La barra lateral contraída (nucleo.js, 'pl_menu') también se aplica antes de pintar. */
+  try { if (localStorage.getItem('pl_menu') === 'min') document.documentElement.classList.add('menu-min'); } catch (_) { /* modo privado */ }
   root.PanelTemas = Object.assign({ aplicar, guardar, actual: () => temaValido(document.documentElement.getAttribute('data-tema')) }, api);
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -219,3 +219,21 @@ test('createIa: lo ya mostrado en una sesión no se repite en la siguiente petic
   const A = new Set(a.items.map((i) => i.name.toLowerCase()));
   for (const i of b.items) assert.ok(!A.has(i.name.toLowerCase()));
 });
+
+test('ahora: sin gustos conocidos recomienda géneros FAMILIARES (destacados o de Bienestar), no exóticos como Azonto o Khmer Pop', () => {
+  const genres = require('../data/genres.json');
+  const { CARACTERES } = require('../src/bienestar');
+  const familiar = new Set([...genres.filter((g) => g.featured).map((g) => g.id), ...Object.values(CARACTERES).flatMap((c) => c.ids)]);
+  for (let h = 0; h < 24; h += 3) {
+    for (let s = 1; s <= 6; s++) {
+      let x = s; const rng = () => { x = (x * 16807) % 2147483647; return x / 2147483647; };
+      const r = require('../src/ia/local').ahora({ hour: h, genres, taste: null, rng });
+      for (const g of r.generos) assert.ok(familiar.has(g.id), `${h} h: ${g.id}`);
+    }
+  }
+  /* con gustos: lo que le gusta a la persona cuenta como familiar aunque sea raro */
+  const taste = { generos: { gustan: ['azonto'], evitar: [] } };
+  let vio = false;
+  for (let s = 1; s <= 30 && !vio; s++) { let x = s; const rng = () => { x = (x * 16807) % 2147483647; return x / 2147483647; }; vio = require('../src/ia/local').ahora({ hour: 12, genres, taste, rng }).generos.some((g) => g.id === 'azonto'); }
+  assert.ok(vio, 'un gusto raro de la persona sí puede salir');
+});

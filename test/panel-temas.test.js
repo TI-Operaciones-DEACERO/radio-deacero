@@ -51,6 +51,7 @@ test('TEMAS: 6 temas, oscuro por omisión; temaValido regresa al oscuro con basu
 const PARES = [
   ['text', 'bg', 4.5], ['text', 'panel', 4.5], ['text', 'input', 4.5], ['text', 'bar', 4.5], ['text', 'accent-bg', 4.5],
   ['muted', 'bg', 4.5], ['muted', 'panel', 4.5], ['muted', 'bar', 4.5],
+  ['text-soft', 'bg', 4.5], ['text-soft', 'panel', 4.5], ['text-soft', 'bar', 4.5], ['text', 'track', 4.5], /* menú y subtítulos; títulos sobre --track */
   ['accent-ink', 'accent', 4.5],
   ['accent-text', 'bg', 4.5], ['accent-text', 'panel', 4.5], ['accent-text', 'bar', 4.5],
   ['danger', 'bg', 4.5], ['danger', 'panel', 4.5],

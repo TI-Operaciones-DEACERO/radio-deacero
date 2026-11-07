@@ -29,6 +29,7 @@ const { createPrograma } = require('./src/horario');
 const { createAnuncios } = require('./src/anuncios');
 const { createAjustes } = require('./src/ajustes');
 const { createDiagnostico } = require('./src/diagnostico');
+const { createCalentador } = require('./src/calentador');
 const genres = require('./data/genres.json');
 
 const PORT = Number(process.env.PORT) || 8000;
@@ -44,9 +45,10 @@ const ajustes = createAjustes({ dir: DATA_DIR }); /* filtro de contenido explíc
 const timesync = createTimeSync(); /* hora real vía cabecera Date de HTTPS: la Pi puede tener el reloj atrasado */
 const reloj = () => timesync.current();
 
-/* El radio comprueba con el proxy que una canción se puede reproducir ANTES de ofrecerla (si no, la pantalla se queda en silencio y salta). */
+/* Para las PANTALLAS el radio comprueba con el proxy que una canción se puede reproducir antes de ofrecerla (si no, se quedan en silencio).
+ * Al oyente del panel se la da directo (sin esa espera), prefiriendo las que ya tienen la URL resuelta. */
 const radio = createRadio({
-  genres, filtro: (t) => ajustes.permite(t),
+  genres, filtro: (t) => ajustes.permite(t), listo: (id) => ytdlp.isResolved(id), resolver: (id) => ytdlp.resolve(id, 'audio'),
   search: (q, n) => ytdlp.search(q, n).catch((e) => { diag.add('yt-dlp', 'error', 'búsqueda: ' + (e && e.message)); throw e; }),
   probe: async (id) => { const ok = await proxy.probe(id); if (!ok) diag.add('yt-dlp', 'aviso', `pista ${id} no reproducible`); return ok; }
 });
@@ -56,6 +58,14 @@ const gemini = createGemini({ key: process.env.GEMINI_KEY || '', ...(process.env
 const geminiJson = gemini.json;
 gemini.json = (...a) => geminiJson(...a).catch((e) => { if (e && e.code !== 'GEMINI_OFF') diag.add('gemini', 'aviso', (e && (e.code || e.message)) + ' → respaldo local'); throw e; });
 const ia = createIa({ genres, artistas: require('./data/seed/artistas.json'), podcasts: require('./data/seed/podcasts.json'), gemini });
+
+/* Calentador: en segundo plano tiene canciones listas (buscadas y resueltas) de los géneros destacados, de a uno cada CALENTAR_CADA_MS
+ * (15 s; 0 lo apaga). Los géneros que la gente pide pasan al frente. Así cambiar de género en el panel empieza al instante. */
+const calentador = createCalentador({
+  radio, generos: () => genres.filter((g) => g.featured).map((g) => g.id),
+  resolver: (id) => ytdlp.resolve(id, 'audio'),
+  cadaMs: process.env.CALENTAR_CADA_MS === undefined ? 15000 : Math.max(0, Number(process.env.CALENTAR_CADA_MS) || 0)
+});
 
 const control = createControl();
 const programa = createPrograma({ dir: DATA_DIR, genres, clock: reloj }); /* horario de las pantallas */
@@ -67,6 +77,7 @@ const server = createServer({
   thumbs: createThumbs(),
   lyrics: createLyrics(),
   control, programa, anuncios, ajustes, diag,
+  onGenero: (id) => calentador.prioridad(id), /* el género que alguien está oyendo se mantiene caliente */
   clients: createClients(),
   history: createHistory({ dir: DATA_DIR }),
   timesync,

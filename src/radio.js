@@ -28,7 +28,11 @@ function createRadio({
   /* Sesiones de oyentes independientes: caducan sin actividad y hay un tope (se descartan las más antiguas). */
   sessionTtlMs = 2 * 60 * 60 * 1000, maxSessions = 100,
   /* filtro(track) → ¿se puede ofrecer? (ajustes: contenido explícito por palabras del título). Aplica a todas las sesiones. */
-  filtro = () => true
+  filtro = () => true,
+  /* listo(id) → ¿la URL ya está resuelta? Al oyente se le da primero una así: empieza a sonar al instante. */
+  listo = () => false,
+  /* resolver(id) → deja la URL resuelta por adelantado (lo usa el viaje de Bienestar para preparar la fase siguiente). */
+  resolver = async () => {}
 }) {
   const byId = new Map(genres.map((g) => [g.id, g]));
   const randomPool = genres.some((g) => g.featured) ? genres.filter((g) => g.featured) : genres;
@@ -98,25 +102,35 @@ function createRadio({
 
   /* allowRepeat: un género pedido a mano puede agotar sus canciones nuevas; entonces
    * se repiten las antiguas en vez de fallar. */
-  async function takeTrack(s, g, allowRepeat = false) {
+  /* tono: palabra que se suma a la búsqueda en un viaje de Bienestar ("relaxing", "focus", "upbeat"…) para que las canciones vayan con
+   * el carácter de la fase; cada (género, tono) tiene su propio pool. Sin tono: la búsqueda de siempre. */
+  async function takeTrack(s, g, allowRepeat = false, tono = '') {
     /* En un viaje de Bienestar tampoco se repite la "misma" canción con otro sufijo (En vivo, Remaster...): se compara la firma del título. */
     const repetida = (t) => s.recent.has(t.id) || (s.viaje && s.firmas.has(firma(t.title)));
     const fresh = (list) => list.filter((t) => !isBad(t.id) && filtro(t) && (allowRepeat || !repetida(t)));
-    let pool = fresh(pools.get(g.id) || []);
+    const key = tono ? `${g.id}#${tono}` : g.id;
+    let pool = fresh(pools.get(key) || []);
     for (let attempt = 0; !pool.length && attempt < SEARCH_ATTEMPTS; attempt++) {
       try {
-        pool = fresh(await search(pick(g.queries), poolSize));
+        pool = fresh(await search(pick(g.queries) + (tono ? ' ' + tono : ''), poolSize));
       } catch { /* siguiente intento con otra consulta */ }
     }
-    if (!pool.length) { pools.set(g.id, []); return null; }
+    if (!pool.length) { pools.set(key, []); return null; }
     const songs = pool.filter((t) => !(t.duration > SONG_MAX_SEC));
     if (songs.length) pool = songs;
     let track = null;
-    for (let tries = 0; tries < probeTriesRacha && pool.length; tries++) {
-      const [t] = pool.splice(Math.floor(rng() * pool.length), 1);
-      if (await playable(t)) { track = t; break; }
+    if (s !== main) {
+      /* Oyente del panel: DIRECTO, sin sondear (el sondeo es resolver con yt-dlp + pedir 1 byte: segundos de espera por pista). Si la
+       * pista falla, su reproductor reintenta una vez y salta; las que ya se sabe que fallan (isBad) nunca se le dan. Primero una ya resuelta. */
+      const i = pool.findIndex((t) => listo(t.id));
+      [track] = pool.splice(i >= 0 ? i : Math.floor(rng() * pool.length), 1);
+    } else {
+      for (let tries = 0; tries < probeTriesRacha && pool.length; tries++) {
+        const [t] = pool.splice(Math.floor(rng() * pool.length), 1);
+        if (await playable(t)) { track = t; break; }
+      }
     }
-    pools.set(g.id, pool);
+    pools.set(key, pool);
     return track;
   }
 
@@ -142,7 +156,8 @@ function createRadio({
     const fresh = found.filter((t) => !s.recent.has(t.id) && !isBad(t.id) && filtro(t));
     const ordered = [...fresh.filter((t) => !(t.duration > SONG_MAX_SEC)), ...fresh.filter((t) => t.duration > SONG_MAX_SEC)];
     let track = null;
-    for (const t of ordered.slice(0, probeTries)) { if (await playable(t)) { track = t; break; } }
+    if (s !== main) track = ordered[0] || null; /* oyente: directo, sin sondear */
+    else for (const t of ordered.slice(0, probeTries)) { if (await playable(t)) { track = t; break; } }
     if (!track) throw err('NO_SOURCE', ordered.length ? `Ningún resultado de "${q}" se pudo reproducir` : `Sin resultados para "${q}"`);
     remember(s, track.id);
     return { track, genre: { id: 'search', label: `Búsqueda: ${q}`, emoji: '🔎', color: '#F59B23' }, genreChanged: true, genreLeft: null };
@@ -188,19 +203,29 @@ function createRadio({
     const fase = v.continuando ? last : v.fase;
     const f = v.plan.fases[fase];
     const cands = v.continuando ? v.cont : f.generos.map((g) => byId.get(g.id)).filter(Boolean);
+    const tono = typeof f.tono === 'string' && /^[a-z]{1,12}$/.test(f.tono) ? f.tono : ''; /* solo una palabra conocida: nada de texto libre en la búsqueda */
     const start = v.rot++;
     let track = null, g = null;
     for (const repetir of [false, true]) {
       for (let i = 0; i < cands.length && !track; i++) {
         g = cands[(start + i) % cands.length];
-        track = await takeTrack(s, g, repetir);
+        track = await takeTrack(s, g, repetir, tono);
       }
       if (track) break;
     }
+    /* Si con el tono no salió nada (búsqueda muy rara), la consulta de siempre: mejor música del género que silencio. */
+    for (let i = 0; tono && !track && i < cands.length; i++) { g = cands[(start + i) % cands.length]; track = await takeTrack(s, g, true); }
     if (!track) throw err('NO_SOURCE', 'Ningún género del viaje devolvió canciones');
     remember(s, track.id, track.title);
     v.n++;
     const info = { fase: fase + 1, tema: v.continuando ? v.n - v.plan.fases.length * v.plan.temasPorFase : v.tema + 1, porFase: v.plan.temasPorFase, continuando: v.continuando, energia: f.energia, nombre: f.nombre };
+    /* Última canción de la fase: en segundo plano se prepara la siguiente (pool con su tono + 1 URL resuelta) para que el cambio no espere. */
+    if (!v.continuando && v.tema === v.plan.temasPorFase - 1 && fase < last) {
+      const sig = v.plan.fases[fase + 1];
+      const gs = sig.generos.map((x) => byId.get(x.id)).filter(Boolean);
+      const t2 = typeof sig.tono === 'string' && /^[a-z]{1,12}$/.test(sig.tono) ? sig.tono : '';
+      if (gs.length) calentar(gs[v.rot % gs.length].id, 4, t2).then((ids) => ids[0] && resolver(ids[0])).catch(() => {});
+    }
     if (!v.continuando) {
       v.tema++;
       if (v.tema >= v.plan.temasPorFase) { v.fase++; v.tema = 0; if (v.fase > last) v.continuando = true; }
@@ -238,7 +263,24 @@ function createRadio({
     return run;
   }
 
-  return { next, startViaje, stopViaje, viajeInfo, sessionCount: () => sessions.size };
+  /* Precalienta un género (para el calentador): si su pool tiene menos de `minimo` canciones utilizables, busca más. NO consume nada.
+   * Devuelve los ids del pool (para resolver las primeras por adelantado). */
+  async function calentar(genreId, minimo = 4, tono = '') {
+    const g = byId.get(genreId);
+    if (!g) return [];
+    const key = tono ? `${g.id}#${tono}` : g.id;
+    const utiles = (list) => list.filter((t) => !isBad(t.id) && filtro(t));
+    let pool = utiles(pools.get(key) || []);
+    if (pool.length < minimo) {
+      const nuevos = utiles(await search(pick(g.queries) + (tono ? ' ' + tono : ''), poolSize));
+      const vistos = new Set(pool.map((t) => t.id));
+      pool = [...pool, ...nuevos.filter((t) => !vistos.has(t.id))];
+      pools.set(key, pool);
+    }
+    return pool.map((t) => t.id);
+  }
+
+  return { next, startViaje, stopViaje, viajeInfo, calentar, sessionCount: () => sessions.size };
 }
 
 module.exports = { createRadio };

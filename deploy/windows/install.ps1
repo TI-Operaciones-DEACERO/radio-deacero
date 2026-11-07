@@ -129,7 +129,13 @@ if (-not $ytOk) { Say 'AVISO: sin yt-dlp la app arranca pero no puede reproducir
 # ---------------------------------------------------------------- app
 Step 'Copiando la aplicacion'
 # Nunca se copian claves (.env) ni datos de personas de la carpeta de origen: viven en <InstallDir>\data (se conserva al actualizar; la clave de Gemini va en <InstallDir>\data\.env)
-$null = robocopy $source (Join-Path $InstallDir 'app') /MIR /NFL /NDL /NJH /NJS /NP /XD .git test docs node_modules vendor users anuncios respaldos /XF podcasts.json history.json users.json sessions.json horario.json ajustes.json anuncios.json nominas-permitidas.txt .env .gitignore .gitattributes
+# Los datos se excluyen por RUTA (data\...): robocopy /XF por nombre atrapa cualquier carpeta (p. ej. data\seed\podcasts.json, que la app necesita)
+$srcData = Join-Path $source 'data'
+$xfDatos = @('podcasts.json', 'history.json', 'users.json', 'sessions.json', 'horario.json', 'ajustes.json', 'anuncios.json', 'nominas-permitidas.txt') | ForEach-Object { Join-Path $srcData $_ }
+$xdDatos = @('users', 'anuncios') | ForEach-Object { Join-Path $srcData $_ }
+# vendor\ de la RAIZ (Node y yt-dlp del paquete) se excluye por ruta: public\assets\vendor (fuentes e iconos del panel) SI se copia
+$xdVendor = Join-Path $source 'vendor'
+$null = robocopy $source (Join-Path $InstallDir 'app') /MIR /NFL /NDL /NJH /NJS /NP /XD .git test docs node_modules respaldos $xdVendor $xdDatos /XF $xfDatos .env .gitignore .gitattributes
 if ($LASTEXITCODE -ge 8) { throw "robocopy fallo (codigo $LASTEXITCODE)" }
 Say "App copiada a $InstallDir\app"
 if ($isAdmin) {

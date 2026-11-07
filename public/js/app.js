@@ -630,6 +630,7 @@
       case 'queue': startPlan(c.items, c.index); break;
       case 'volume': if (c.set !== undefined) setVolumeValue(c.set); else nudgeVolume(c.delta); break;
       case 'mute': toggleMute(); break;
+      case 'seek': seekTo(c.t); break; /* barra de progreso de /panel: segundos, validados */
       case 'mode': setMode(c.mode); break;
       case 'lyrics': $('btnLyrics').click(); break;
       case 'announce': announce(Date.now() + timeOffset, true); break;
@@ -637,13 +638,19 @@
       default: break;
     }
   }
+  /* Adelantar o regresar a un segundo de la canción: solo números finitos ≥ 0, con canción y sin pasar del final. */
+  function seekTo(t) {
+    const d = duration();
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || !(d > 0)) return;
+    try { media.currentTime = Math.min(t, Math.max(0, d - 0.5)); } catch (_) { /* sin seek */ }
+  }
   /* Interfaz para /panel (mismo origen): órdenes directas y el estado con la misma forma que /api/state. */
   window.__player = {
     handleCommand,
     getState() {
       const cur = state.current;
       return { players: 1, blocked: !$('start').hidden, paused: media.paused, muted: media.muted || Number(vol.value) === 0, volume: Number(vol.value), mode: state.mode,
-        time: media.currentTime, track: cur && cur.track, genre: cur && cur.genre,
+        time: media.currentTime, duration: duration(), track: cur && cur.track, genre: cur && cur.genre,
         viaje: (cur && cur.viaje) || null, /* viaje de Bienestar de la pista que suena (lo trae /api/next) */
         cola: state.plan ? { i: state.plan.i, total: state.plan.items.length } : null }; /* lista en curso (orden 'queue') */
     }

@@ -27,6 +27,7 @@ node scripts/humo.js       # humo: arranca el servidor real con datos temporales
 | `PANEL_V2` | `1` | `0` apaga el panel completo |
 | `GEMINI_KEY` | — | Clave de Gemini (IA de pago). Sin ella, o si falla o se agota la cuota, responde el **motor local** sin avisar al oyente. Solo en `.env` o el entorno, nunca en el repo |
 | `GEMINI_MODEL` | `gemini-3.7-flash` | Modelo de Gemini |
+| `CALENTAR_CADA_MS` | `15000` | Cada cuánto el **calentador** prepara (busca y resuelve) canciones de un género destacado más, para que en el panel cambiar de género empiece al instante. `0` lo apaga (ahorra CPU en la Pi) |
 | `HOSTS_PERMITIDOS` | — | Nombres extra (separados por coma) con los que se puede entrar a cuenta/administración (anti DNS rebinding) |
 | `COOKIE_SECURE` | — | `true` si se sirve por HTTPS |
 | `YTDLP_BIN` | autodetectado | Ruta de yt-dlp si no está en el PATH |
@@ -45,7 +46,7 @@ cierra a la fuerza y no siempre guarda el último modo elegido, así que el par�
 | Dirección | Vista |
 |---|---|
 | `/` | Reproductor normal: carátula o video a un lado, controles al otro. |
-| `/panel` | **Panel completo** (ver abajo). Su pestaña *Radio* es el panel de siempre. Con `PANEL_PRINCIPAL=simple`, `/panel` vuelve a ser el de siempre. `/panel/completo` funciona igual (marcadores). |
+| `/panel` | **Panel completo** (ver abajo), con el aspecto del DEACERO Play anterior. Con `PANEL_PRINCIPAL=simple`, `/panel` vuelve a ser el de siempre. `/panel/completo` funciona igual (marcadores). |
 | `/panel/simple` | **El panel de `/remote`, pero la música suena en ESTE navegador y no pide clave** (búsqueda, géneros, podcasts, pausa, volumen…). No es una pantalla ni un control remoto: no recibe las órdenes de nadie, no manda las suyas a las demás pantallas y no pisa su estado. **Lleva su propia racha** (el navegador manda un id de sesión; el servidor guarda aparte el género, las canciones que le quedan y las últimas que sonaron; caduca a las 2 h sin uso y hay tope de 100 sesiones), así que elegir género o buscar aquí NO cambia lo que suena en `/` ni en `/kiosco`. Solo audio (sin video ni letra). Los navegadores no dejan sonar sin un toque: la primera vez aparece «Toca para empezar a escuchar». Sin clave se ocultan «Guardar podcast», quitar podcasts y la pestaña *Equipos*. |
 | `/kiosco` | **Vista kiosco, solo para ver**: el video de fondo a pantalla completa, difuminado (se distingue el video, sin detalle), y al frente la **hora en grande** (12 h con AM/PM, segundos y fecha), la canción y la que sigue. No tiene botones, barra de progreso, volumen, género ni dirección de control, y el teclado no hace nada: todo se maneja desde `/remote` (o `play`). Con `?mode=audio` el fondo es la carátula difuminada en vez del video. |
 
@@ -60,8 +61,14 @@ Para que la Pi arranque en la vista kiosco: `~/DEACEROPLAY-lite/deploy/install-a
 
 ## Panel completo (`/panel`)
 
-Pestañas: **Radio** (el panel de siempre, con el motor de audio: nunca se quita, al cambiar de pestaña la música sigue), **Bienestar**, **Para ti**,
-**Favoritos**, **Buscar**, **Naturaleza** y **Administración** (solo aparece con acceso). Cada módulo pesado se descarga al abrir su vista.
+Se ve y se usa como el **DEACERO Play anterior** (negro, tarjetas #242424, naranja, Inter y Font Awesome auto-hospedados en `public/assets/vendor/`, licencias en `LICENCIAS.txt`):
+**barra lateral** (Inicio, Buscar, Bienestar, Naturaleza; *Tu Música*: Historial, Favoritos y playlists, Para ti; *Descubrir*: 9 atajos de género que arrancan la radio continua;
+abajo *Administración*, solo con acceso; se puede contraer), **barra superior** (buscador, Apariencia, Ayuda y cuenta) y **barra de reproducción** abajo (portada, título,
+género, anterior / play / siguiente, progreso que se puede mover, Me gusta / No me gusta / playlist, volumen, letra, karaoke, visualizador y naturaleza; si el navegador no deja
+sonar sin un toque aparece «Toca para empezar a escuchar»). **Inicio es la radio**: subpestañas *Recomendado* (carrusel «Mira lo que la IA tiene para ti», Bienestar rápido
+y géneros destacados), *Bienestar* y *Podcasts*. En el celular (≤ 768 px) no hay barra lateral: abajo van la barra compacta y las pestañas Inicio, Bienestar, Descubrir (el menú) y Biblioteca.
+El **motor de audio** es un iframe oculto (`/?view=local&mode=audio&sid=…`) que se crea una vez: navegar no corta la música. Cada módulo pesado se descarga al abrir su vista.
+Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno nuevo, corre `node scripts/recortar-iconos.js` (la prueba `panel-iconos` lo exige).
 
 - **Cuenta (opcional):** se entra solo con el **número de nómina** (4–10 dígitos), sin contraseña; sin cuenta todo suena igual. La cuenta guarda Me gusta / No me gusta,
   playlists, historial, tema y gustos. **Las cuentas no se pueden borrar desde la app** (se pueden descargar los datos propios); el administrador las desactiva.
@@ -70,13 +77,20 @@ Pestañas: **Radio** (el panel de siempre, con el motor de audio: nunca se quita
 - **Para ti / IA:** recomendado ahora, hecho para ti, descubrir, artistas, podcasts y playlists. Usa **Gemini** si hay `GEMINI_KEY` (límite de 30/min y 1500/día,
   cortacircuitos) y si no, o si falla, un motor **local** con semillas (`data/seed/`). El oyente no nota la diferencia salvo en la variedad.
 - **Bienestar (Viaje ISO):** eliges cómo estás (18 ánimos), a dónde quieres llegar (6), estilo, idioma, duración e intensidad; el plan va por 5 fases
-  de energía y al terminar **continúa** sin silencio. El viaje es de esa sesión: no cambia lo que suena en las pantallas ni a otros oyentes.
+  de energía (cada fase muestra su carácter musical: Calma, Concentración, Buen ánimo…) y al terminar **continúa** sin silencio. El viaje es de esa sesión: no cambia lo que suena en las pantallas ni a otros oyentes.
+  Cada fase tiene un **carácter** con géneros curados y familiares (`src/bienestar.js`, `CARACTERES`): se empieza reconociendo el ánimo
+  (estrés → soft rock/pop suave; enojo → rock; tristeza → baladas y boleros) y se pasa al del destino (relajar → lo-fi, acústico, bossa; dormir → instrumental;
+  concentrarse → estudio, clásica, jazz; energía → pop, rock, cumbia, electrónica). Un viaje para calmar nunca pasa por música de fiesta o agresiva.
+  Las canciones de cada fase se buscan con su tono (*relaxing*, *focus*, *upbeat*…), y la fase siguiente se prepara antes de que toque.
+- **Velocidad:** al oyente del panel la canción se le da **directo** (sin la comprobación previa que sí hacen las pantallas; si una falla, el reproductor
+  reintenta y salta) y se prefieren canciones ya resueltas. El **calentador** tiene listos los géneros destacados y los que la gente está oyendo:
+  medido en la pantalla Windows, cambiar a un género preparado tarda ~0.2 s hasta sonar, contra ~7 s sin preparar.
 - **Buscar:** lista de resultados; ▶ toca una vez y luego sigue la radio.
 - **Letra y Karaoke** a pantalla completa (sincronizada si lrclib la tiene; si no, desplazamiento proporcional estimado).
 - **Naturaleza:** lluvia, olas, viento, bosque, ruido rosa y marrón **sintetizados** en el navegador (sin archivos ni red), mezclables, con suavizado, espacio y temporizador.
 - **Visualizador** (8 modos): animación **decorativa** (no analiza el audio: hacerlo exigiría tocar el `<audio>` del motor). Arranca quieto en equipos lentos y con «reducir movimiento».
 - **6 temas** (oscuro, claro, alto contraste, brasa, océano, bosque), todos AA; con cuenta se recuerdan en otros equipos.
-- **Atajos:** espacio, `N` siguiente, `L` letra, `K` karaoke, `/` buscar, `1`–`9` pestañas, `?` ayuda (se pueden apagar en la ayuda).
+- **Atajos:** espacio, `N` siguiente, `L` letra, `K` karaoke, `/` buscar, `1`–`9` secciones del menú, `?` ayuda (se pueden apagar en la ayuda).
 - No hay ecualizador ni crossfade sobre la música, por la misma razón que el visualizador.
 
 ## Administración (pestaña o `/api/admin/*`)
@@ -169,7 +183,7 @@ servidor (el estado del radio —género y recientes— es uno solo). Está pens
 
 | API | |
 |---|---|
-| `POST /api/cmd` | `{cmd: toggle/play/pause/next/prev/random/mute/lyrics}` · `{cmd:'genre',id}` · `{cmd:'volume',set/delta}` · `{cmd:'mode',mode}` · `{cmd:'search',q}` |
+| `POST /api/cmd` | `{cmd: toggle/play/pause/next/prev/random/mute/lyrics}` · `{cmd:'genre',id}` · `{cmd:'volume',set/delta}` · `{cmd:'mode',mode}` · `{cmd:'search',q}` (el motor también acepta `{cmd:'seek',t}` en segundos, que usa la barra de progreso de `/panel`) |
 | | `{cmd:'track',kind:'podcast'\|'search',track:{id,title,channel,duration}}` toca un episodio/canción concreta (pauta única) |
 | `GET /api/state` | qué suena, pausa, volumen, modo, pantallas conectadas |
 | `GET/POST /api/podcasts`, `DELETE /api/podcasts/:id` | podcasts guardados (`{name, q}`) |
@@ -300,7 +314,7 @@ src/users.js, sessions.js, authroutes.js   cuenta por nómina       src/library.
 src/gemini.js, ia/, iaroutes.js            IA (Gemini + local)     src/bienestar.js, bienestarroutes.js  Viaje ISO
 src/horario.js, anuncios.js, ajustes.js, diagnostico.js, adminroutes.js   administración     src/env.js  lector de .env
 public/              interfaz (HTML + CSS + JS, sin build): index.html (pantalla), remote.html (control y panel simple), panel-completo.html + js/panel/
-scripts/             humo.js (prueba de humo), respaldo.js (copia/restauración de DATA_DIR), enriquecer-generos.js
+scripts/             humo.js (prueba de humo), respaldo.js (copia/restauración de DATA_DIR), enriquecer-generos.js, recortar-iconos.js
 data/seed/           artistas y podcasts semilla del motor local de IA
 deploy/              play (CLI), start/stop-kiosk.sh, install-autostart.sh, play-lite.user.service (Raspberry Pi)
 MENU.cmd, LEEME.txt   menú y pasos para Windows

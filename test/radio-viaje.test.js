@@ -9,12 +9,14 @@ const B = require('../src/bienestar');
 const seeded = (seed) => () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const VACIO = { generos: { gustan: [], evitar: [] }, artistas: { gustan: [], evitar: [] }, total: 0 };
 const porConsulta = new Map(genres.flatMap((g) => g.queries.map((q) => [q, g.id])));
+const TONOS = / (relaxing|focus|chill|happy|upbeat)$/; /* en un viaje la consulta lleva el tono de la fase al final */
+const consultas = [];
 
 let n = 0;
 const mk = (over = {}) => createRadio({
   genres, rng: seeded(11),
   /* cada búsqueda trae 5 canciones nuevas; el canal dice de qué género vinieron */
-  search: async (q) => { const gid = porConsulta.get(q); return Array.from({ length: 5 }, (_, k) => ({ id: ('v' + String(++n).padStart(10, '0')).slice(-11), title: `${gid} canción ${n}-${k}`, channel: gid, duration: 200 })); },
+  search: async (q) => { consultas.push(q); const gid = porConsulta.get(q) || porConsulta.get(q.replace(TONOS, '')); return Array.from({ length: 5 }, (_, k) => ({ id: ('v' + String(++n).padStart(10, '0')).slice(-11), title: `${gid} canción ${n}-${k}`, channel: gid, duration: 200 })); },
   ...over
 });
 const plan = (o = {}) => B.planViaje({ estado: 'estresado', destino: 'relajar', duracion: 'corta', genres, taste: VACIO, rng: seeded(5), ...o });
@@ -126,4 +128,31 @@ test('startViaje exige una sesión de oyente y un plan válido', () => {
   const r = mk();
   assert.throws(() => r.startViaje('', plan(), VACIO));
   assert.throws(() => r.startViaje('sesion-viaje', { fases: [] }, VACIO));
+});
+
+test('cada fase busca sus canciones con el tono de su carácter (relajar → "relaxing"); sin tono, la consulta de siempre', async () => {
+  const r = mk(); const p = plan(); /* estresado → relajar: la última fase es «calma» con tono relaxing */
+  r.startViaje('sesion-tono', p, VACIO);
+  consultas.length = 0;
+  await sacar(r, 'sesion-tono', 10);
+  const ultima = new Set(p.fases[4].generos.flatMap((g) => genres.find((x) => x.id === g.id).queries));
+  const deLaUltima = consultas.filter((q) => ultima.has(q.replace(TONOS, '')));
+  assert.ok(deLaUltima.length >= 1, 'buscó canciones de la última fase');
+  for (const q of deLaUltima) assert.match(q, / relaxing$/, q);
+  consultas.length = 0;
+  await r.next({ session: 'otra-sesion-normal' });
+  for (const q of consultas) assert.doesNotMatch(q, TONOS, 'la radio normal no cambia sus búsquedas');
+});
+
+test('al llegar a la última canción de una fase, prepara en segundo plano la siguiente (con su tono) y resuelve su primera canción', async () => {
+  const resueltos = [];
+  const r = mk({ resolver: async (id) => { resueltos.push(id); } });
+  const p = plan(); /* corta = 2 temas por fase */
+  r.startViaje('sesion-precalienta', p, VACIO);
+  consultas.length = 0;
+  await sacar(r, 'sesion-precalienta', 2); /* fin de la fase 1 */
+  await new Promise((ok) => setImmediate(ok));
+  const sig = new Set(p.fases[1].generos.flatMap((g) => genres.find((x) => x.id === g.id).queries));
+  assert.ok(consultas.some((q) => sig.has(q.replace(TONOS, ''))), 'buscó canciones de la fase 2 antes de que tocara');
+  assert.ok(resueltos.length >= 1, 'dejó resuelta al menos una');
 });

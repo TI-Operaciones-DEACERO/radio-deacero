@@ -1,0 +1,16 @@
+Fuentes e iconos de terceros del panel (/panel). Copiados del DEACERO Play anterior (assets/vendor/), sin cambios en los archivos de fuente.
+
+Inter (inter/inter-latin.woff2, inter/inter-latin-ext.woff2, inter/inter.css)
+  Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+  Licencia: SIL Open Font License 1.1 (OFL-1.1) — https://openfontlicense.org
+  Se pueden usar, copiar, modificar y redistribuir con la aplicación; no se pueden vender solas.
+
+Font Awesome Free 6.5.0 (fontawesome/)
+  Copyright 2023 Fonticons, Inc. — https://fontawesome.com/license/free
+  - Iconos: Creative Commons Attribution 4.0 (CC BY 4.0) — https://creativecommons.org/licenses/by/4.0/
+  - Fuentes (webfonts/fa-solid-900.woff2, webfonts/fa-brands-400.woff2): SIL Open Font License 1.1 (OFL-1.1)
+  - Código (css/all.min.css y su recorte css/iconos.min.css): MIT License — https://opensource.org/licenses/MIT
+  La atribución de los iconos va en la cabecera de las hojas de estilo y en este archivo.
+  css/iconos.min.css es un recorte de css/all.min.css con solo los iconos que usa el panel; lo genera scripts/recortar-iconos.js.
+
+Bandera de México (../bandera-mx.svg): dibujo propio y simplificado, sin escudo.

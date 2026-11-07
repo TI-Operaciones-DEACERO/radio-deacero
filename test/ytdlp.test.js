@@ -102,6 +102,20 @@ test('resolve: cachea según el parámetro expire de la URL', async () => {
   assert.equal(spawn.calls.length, 2, 'el modo forma parte de la clave');
 });
 
+test('isResolved: dice si la URL ya está en caché y vigente, sin lanzar procesos', async () => {
+  const live = `https://x.googlevideo.com/v?expire=${NOW / 1000 + 600}`;
+  const spawn = fakeSpawn(() => ({ stdout: `100\n${live}\n` }));
+  const t = { now: NOW };
+  const yt = createYtdlp({ spawn, cmd: CMD, now: () => t.now });
+  assert.equal(yt.isResolved(ID('a')), false);
+  await yt.resolve(ID('a'), 'audio');
+  assert.equal(yt.isResolved(ID('a')), true);
+  assert.equal(yt.isResolved(ID('a'), 'video'), false);
+  t.now += 601 * 1000;
+  assert.equal(yt.isResolved(ID('a')), false, 'caducada');
+  assert.equal(spawn.calls.length, 1);
+});
+
 test('resolve: no cachea URLs que ya caducaron o caducan en < 60 s', async () => {
   const dead = `https://x.googlevideo.com/v?expire=${NOW / 1000 + 30}`;
   const spawn = fakeSpawn(() => ({ stdout: `100\n${dead}\n` }));

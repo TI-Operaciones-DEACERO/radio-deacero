@@ -64,6 +64,8 @@
 
   P.vistas.buscar = {
     montar,
-    enfocar() { if (campo) { campo.focus(); campo.select(); } }
+    enfocar() { if (campo) { campo.focus(); campo.select(); } },
+    /* Desde el buscador de la barra superior: busca ese texto aquí. */
+    buscarTexto(q) { if (!campo) return; campo.value = String(q || '').slice(0, 100); buscar(); }
   };
 })();

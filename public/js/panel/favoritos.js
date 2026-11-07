@@ -4,7 +4,7 @@
   'use strict';
   const P = window.Panel, h = P.h, L = P.L, A = P.api, U = window.Util;
   const els = {};
-  let activa = 'likes', abierta = null; /* abierta = id de la playlist que se está viendo */
+  let activa = 'likes', abierta = null, subtabs = null; /* abierta = id de la playlist que se está viendo */
 
   /* ───────────── piezas comunes ───────────── */
   const cuentaTxt = (n) => (n === 1 ? '1 canción' : n + ' canciones');
@@ -199,7 +199,7 @@
     })));
     for (const s of SUBS) els[s.id] = h('div', { class: 'subpnl', role: 'tabpanel', id: 'fp-' + s.id, 'aria-labelledby': 'ft-' + s.id, tabindex: '0', hidden: s.id !== 'likes' });
     el.append(h('h1', { class: 'vt', text: 'Favoritos' }), h('nav', { class: 'subtabs', 'aria-label': 'Secciones de Favoritos' }, lista), ...SUBS.map((s) => els[s.id]));
-    P.tablist(lista, (_, i) => {
+    subtabs = P.tablist(lista, (_, i) => {
       activa = SUBS[i].id;
       SUBS.forEach((s) => { els[s.id].hidden = s.id !== activa; });
       SUBS[i].pintar();
@@ -213,6 +213,8 @@
 
   P.vistas.favoritos = {
     montar,
-    mostrar() { SUBS.find((s) => s.id === activa).pintar(); }
+    mostrar() { SUBS.find((s) => s.id === activa).pintar(); },
+    /* Desde el menú (Historial, Favoritos y playlists): abre esa subpestaña. */
+    sub(id) { const i = SUBS.findIndex((s) => s.id === id); if (subtabs && i >= 0 && SUBS[i].id !== activa) subtabs.elegir(i, false); }
   };
 })();

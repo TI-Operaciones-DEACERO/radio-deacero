@@ -22,7 +22,7 @@
     const id = user ? user.id : null;
     if (id !== lastId) { lastId = id; window.dispatchEvent(new CustomEvent('play:user', { detail: { user } })); }
     btn.dataset.in = user ? '1' : '0';
-    btn.textContent = user ? (user.nombre || 'Nómina ' + user.nomina) : 'Entrar';
+    btn.textContent = user ? (user.nombre || 'Nómina ' + user.nomina) : 'Entrar con nómina';
     if (user) btn.setAttribute('aria-label', 'Mi cuenta: ' + btn.textContent); else btn.removeAttribute('aria-label');
     dlg.setAttribute('aria-labelledby', user ? 'miCuentaTitle' : 'acctTitle'); /* el nombre del cuadro es el título que se ve */
     $('entrarForm').hidden = !!user;

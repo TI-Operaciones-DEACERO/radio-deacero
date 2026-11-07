@@ -22,3 +22,5 @@ Thumbs.db
 
 # paquete de instalación: Node y yt-dlp se añaden al armar el zip, no se versionan
 vendor/
+# ...salvo las fuentes e iconos del panel (Inter y Font Awesome), que sí son parte de la app
+!public/assets/vendor/

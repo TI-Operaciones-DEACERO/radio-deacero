@@ -4,18 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>DEACERO Play · Panel</title>
-<!-- Las rutas son absolutas: la página se sirve en /panel/completo y las relativas caerían en /panel/. -->
+<title>DEACERO Play</title>
+<!-- Las rutas son absolutas: la página se sirve en /panel y /panel/completo, y las relativas caerían en /panel/. -->
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<!-- Fuentes e iconos del DEACERO Play anterior, auto-hospedados (sin CDN). Licencias en /assets/vendor/LICENCIAS.txt -->
+<link rel="preload" href="/assets/vendor/inter/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/vendor/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/vendor/inter/inter.css">
+<link rel="stylesheet" href="/assets/vendor/fontawesome/css/iconos.min.css">
 <link rel="stylesheet" href="/css/panel-completo.css">
-<!-- El tema guardado se aplica antes de pintar (sin parpadeo). -->
+<!-- El tema guardado y el menú contraído se aplican antes de pintar (sin parpadeo). -->
 <script src="/js/panel/temas.js"></script>
 </head>
 <body>
-<a class="skip" href="#vista">Saltar al contenido</a>
-<a class="skip" id="skipAhora" href="#ahora" hidden>Ir a controles de la canción</a>
+<a class="skip" href="#vista" id="skipVista">Saltar al contenido</a>
+<a class="skip" href="#reproductor" id="skipAhora">Ir al reproductor</a>
 
-<!-- Iconos del reproductor (dibujados, sin fuente de emoji: la Raspberry no la trae) -->
+<!-- Iconos dibujados que usan los módulos (Panel.icono): sin fuente de emoji, la Raspberry no la trae -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h4v14H6zM14 5h4v14h-4z"/></symbol>
@@ -24,73 +29,210 @@
   <symbol id="i-letra" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 6h16M4 11h16M4 16h10"/></symbol>
   <symbol id="i-mic" viewBox="0 0 24 24"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3c0 3-2.5 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.4 2.7 6.2 6 6.7V21h2v-3.3c3.3-.5 6-3.3 6-6.7z"/></symbol>
   <symbol id="i-vis" viewBox="0 0 24 24"><path fill="currentColor" d="M3 14h3v6H3zM8 8h3v12H8zM13 11h3v9h-3zM18 4h3v16h-3z"/></symbol>
-  <symbol id="i-mas" viewBox="0 0 24 24"><path fill="currentColor" d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
-  <symbol id="i-tema" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2A4.5 4.5 0 0 0 21 10.8C21 6.5 17 3 12 3zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/></symbol>
 </svg>
 
-<header class="top">
-  <div class="brand"><img src="/assets/favicon.svg" alt="" width="28" height="28"><span>DEACERO <em>PLAY</em></span></div>
-  <div class="top-acc">
-    <button type="button" class="ico ghost-ico" id="aparienciaBtn" aria-haspopup="dialog" aria-label="Apariencia y ajustes" title="Apariencia y ajustes"><svg width="22" height="22" aria-hidden="true"><use href="#i-tema"/></svg></button>
-    <button type="button" class="ico ghost-ico" id="ayudaBtn" aria-haspopup="dialog" aria-label="Atajos de teclado" title="Atajos de teclado (?)" aria-keyshortcuts="?"><span aria-hidden="true" class="ico-txt">?</span></button>
-    <button type="button" class="acct" id="acctBtn" aria-haspopup="dialog">Entrar</button>
+<!-- ═══════════════ BARRA LATERAL (en el celular: pestaña «Descubrir») ═══════════════ -->
+<nav class="sidebar" id="sidebar" aria-label="Menú principal">
+  <div class="sidebar-brand">
+    <i class="fa-brands fa-cloudversify brand-icon" aria-hidden="true"></i>
+    <div class="brand-txt">
+      <p class="brand-name">DEACERO <em>PLAY</em></p>
+      <p class="brand-sub">Música para tu bienestar</p>
+    </div>
   </div>
-</header>
 
-<nav class="tabs" aria-label="Secciones">
-  <div role="tablist" aria-label="Secciones del panel" id="tabs" class="tablist">
-    <button type="button" class="tab" role="tab" id="tab-radio" aria-selected="true" aria-controls="p-radio" data-vista="radio">Radio</button>
-    <button type="button" class="tab" role="tab" id="tab-buscar" aria-selected="false" aria-controls="p-buscar" tabindex="-1" data-vista="buscar">Buscar</button>
-    <button type="button" class="tab" role="tab" id="tab-bienestar" aria-selected="false" aria-controls="p-bienestar" tabindex="-1" data-vista="bienestar">Bienestar</button>
-    <button type="button" class="tab" role="tab" id="tab-parati" aria-selected="false" aria-controls="p-parati" tabindex="-1" data-vista="parati">Para ti</button>
-    <button type="button" class="tab" role="tab" id="tab-favoritos" aria-selected="false" aria-controls="p-favoritos" tabindex="-1" data-vista="favoritos">Favoritos</button>
-    <button type="button" class="tab" role="tab" id="tab-naturaleza" aria-selected="false" aria-controls="p-naturaleza" tabindex="-1" data-vista="naturaleza">Naturaleza</button>
+  <div class="side-scroll">
+    <ul class="nav-list" id="tabs">
+      <li><button type="button" class="nav-item" data-vista="inicio" aria-current="page" title="Inicio"><i class="fas fa-house nav-ico" aria-hidden="true"></i><span class="nav-txt">Inicio</span></button></li>
+      <li><button type="button" class="nav-item" data-vista="buscar" title="Buscar"><i class="fas fa-magnifying-glass nav-ico" aria-hidden="true"></i><span class="nav-txt">Buscar</span></button></li>
+      <li><button type="button" class="nav-item" data-vista="bienestar" title="Bienestar"><i class="fas fa-heart-pulse nav-ico" aria-hidden="true"></i><span class="nav-txt">Bienestar</span></button></li>
+      <li><button type="button" class="nav-item" data-vista="naturaleza" title="Naturaleza"><i class="fas fa-leaf nav-ico" aria-hidden="true"></i><span class="nav-txt">Naturaleza</span></button></li>
+    </ul>
+
+    <h2 class="nav-section-label" id="lblTuMusica"><span class="nav-txt">Tu Música</span></h2>
+    <ul class="nav-list" aria-labelledby="lblTuMusica">
+      <li><button type="button" class="nav-item" data-vista="historial" title="Historial"><i class="fas fa-clock-rotate-left nav-ico" aria-hidden="true"></i><span class="nav-txt">Historial</span></button></li>
+      <li><button type="button" class="nav-item" data-vista="favoritos" title="Favoritos y playlists"><i class="fas fa-bars-staggered nav-ico" aria-hidden="true"></i><span class="nav-txt">Favoritos y playlists</span></button></li>
+      <li><button type="button" class="nav-item" data-vista="parati" title="Para ti"><i class="fas fa-wand-magic-sparkles nav-ico" aria-hidden="true"></i><span class="nav-txt">Para ti</span></button></li>
+    </ul>
+
+    <h2 class="nav-section-label" id="lblDescubrir"><span class="nav-txt">Descubrir</span></h2>
+    <p class="sr-only" id="hintDescubrir">Cada género inicia una radio continua.</p>
+    <!-- Lo llena nucleo.js con PanelRadio.DESCUBRIR (radio-logica.js) -->
+    <ul class="nav-list" id="descubrir" aria-labelledby="lblDescubrir" aria-describedby="hintDescubrir"></ul>
+  </div>
+
+  <div class="sidebar-bottom">
     <!-- Solo aparece si GET /api/admin/estado responde 200 (la propia máquina o con la clave) -->
-    <button type="button" class="tab" role="tab" id="tab-admin" aria-selected="false" aria-controls="p-admin" tabindex="-1" data-vista="admin" hidden>Administración</button>
+    <button type="button" class="nav-item sidebar-admin-btn" id="tab-admin" data-vista="admin" title="Administración" hidden><i class="fas fa-shield-halved nav-ico" aria-hidden="true"></i><span class="nav-txt">Administración</span></button>
   </div>
 </nav>
 
-<main id="vista" tabindex="-1">
-  <!-- Radio: el panel de siempre (/panel/simple, que existe siempre) con el motor de audio. Nunca se quita: al cambiar de pestaña solo se esconde y la música sigue. -->
-  <section class="pnl radio-pnl" id="p-radio" role="tabpanel" aria-labelledby="tab-radio">
-    <iframe id="radio" class="radio" src="/panel/simple" title="Reproductor de radio"></iframe>
-  </section>
-  <section class="pnl" id="p-buscar" role="tabpanel" aria-labelledby="tab-buscar" tabindex="0" hidden></section>
-  <section class="pnl" id="p-bienestar" role="tabpanel" aria-labelledby="tab-bienestar" tabindex="0" hidden></section>
-  <section class="pnl" id="p-parati" role="tabpanel" aria-labelledby="tab-parati" tabindex="0" hidden></section>
-  <section class="pnl" id="p-favoritos" role="tabpanel" aria-labelledby="tab-favoritos" tabindex="0" hidden></section>
-  <section class="pnl" id="p-naturaleza" role="tabpanel" aria-labelledby="tab-naturaleza" tabindex="0" hidden></section>
-  <section class="pnl" id="p-admin" role="tabpanel" aria-labelledby="tab-admin" tabindex="0" hidden></section>
-</main>
+<!-- ═══════════════ CONTENIDO ═══════════════ -->
+<div class="contenido" id="contenido">
+  <header class="topbar">
+    <button type="button" class="icon-btn side-toggle" id="sideToggle" aria-controls="sidebar" aria-expanded="true" aria-label="Contraer el menú lateral" title="Contraer el menú lateral"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+    <form class="yts" id="buscaTop" role="search" novalidate>
+      <label for="topQ" class="sr-only">Buscar artista o canción</label>
+      <input id="topQ" type="search" maxlength="100" autocomplete="off" enterkeyhint="search" placeholder="Buscar artista o canción..." aria-keyshortcuts="/">
+      <button type="submit" class="yts-btn" aria-label="Buscar" title="Buscar"><i class="fas fa-magnifying-glass" aria-hidden="true"></i></button>
+    </form>
+    <div class="topbar-right">
+      <button type="button" class="icon-btn" id="aparienciaBtn" aria-haspopup="dialog" aria-label="Apariencia y ajustes" title="Apariencia y ajustes"><i class="fas fa-palette" aria-hidden="true"></i></button>
+      <button type="button" class="icon-btn" id="ayudaBtn" aria-haspopup="dialog" aria-label="Ayuda: atajos de teclado" title="Ayuda: atajos de teclado (?)" aria-keyshortcuts="?"><i class="fas fa-circle-question" aria-hidden="true"></i></button>
+      <button type="button" class="acct" id="acctBtn" aria-haspopup="dialog">Entrar con nómina</button>
+    </div>
+  </header>
+
+  <main id="vista" tabindex="-1">
+    <!-- ── INICIO = RADIO: portada para escoger qué escuchar ── -->
+    <section class="pnl" id="p-inicio" aria-labelledby="inicioT">
+      <div class="radio-hero">
+        <h1 class="hero-brand" id="inicioT"><img src="/assets/favicon.svg" class="hero-logo" alt="" width="48" height="48"><span class="hero-brand-name">DEACERO <em>Play</em></span></h1>
+        <p class="hero-desc">Inteligencia musical para tu bienestar</p>
+      </div>
+
+      <div class="radio-subtabs" id="rsubs" role="tablist" aria-label="Radio">
+        <button type="button" class="rsub" role="tab" id="rs-reco" aria-selected="true" aria-controls="sp-reco" data-sub="reco"><i class="fa-brands fa-cloudversify" aria-hidden="true"></i> Recomendado</button>
+        <button type="button" class="rsub" role="tab" id="rs-bienestar" aria-selected="false" aria-controls="p-bienestar" tabindex="-1" data-sub="bienestar"><i class="fas fa-heart-pulse" aria-hidden="true"></i> Bienestar</button>
+        <button type="button" class="rsub" role="tab" id="rs-podcasts" aria-selected="false" aria-controls="sp-podcasts" tabindex="-1" data-sub="podcasts"><i class="fas fa-microphone-lines" aria-hidden="true"></i> Podcasts</button>
+      </div>
+
+      <!-- Recomendado -->
+      <div class="rsub-pane" id="sp-reco" role="tabpanel" aria-labelledby="rs-reco" tabindex="0">
+        <section class="aireco-section" aria-labelledby="recoT">
+          <div class="aireco-header">
+            <div class="aireco-title-wrap">
+              <img class="aireco-spark" src="/assets/emoji/2728.svg" alt="" width="28" height="28">
+              <div>
+                <h2 class="aireco-title" id="recoT">Mira lo que la IA tiene para ti</h2>
+                <p class="aireco-subtitle" id="recoSub">Seleccionado para este momento del día</p>
+              </div>
+            </div>
+            <button type="button" class="aireco-refresh-btn" id="recoAct" aria-label="Nuevas sugerencias" title="Nuevas sugerencias"><i class="fas fa-rotate-right" aria-hidden="true"></i></button>
+          </div>
+          <div class="aireco-carousel-wrap">
+            <button type="button" class="aireco-carousel-btn" id="recoPrev" aria-controls="recoCards" aria-label="Ver sugerencias anteriores" title="Anteriores"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+            <div class="aireco-scroll" id="recoScroll">
+              <ul class="aireco-cards" id="recoCards" aria-labelledby="recoT" aria-describedby="recoSub"></ul>
+            </div>
+            <button type="button" class="aireco-carousel-btn" id="recoNext" aria-controls="recoCards" aria-label="Ver más sugerencias" title="Más"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+          </div>
+          <p class="fuente" id="recoFuente"></p>
+        </section>
+
+        <section class="aireco-section mj-embed-card" aria-labelledby="bzqT">
+          <div class="mj-embed-head">
+            <img class="mj-embed-icon" src="/assets/emoji/1f9d8.svg" alt="" width="36" height="36">
+            <div class="mj-embed-titles">
+              <h2 class="mj-embed-title" id="bzqT">¿Cómo te sientes ahora?</h2>
+              <p class="mj-embed-sub">Elige tu ánimo y armamos un viaje musical para ti</p>
+            </div>
+            <button type="button" class="mj-embed-more" id="bzqMas">Personalizar <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+          </div>
+          <div id="bzqGrupos"><p class="cargando">Cargando…</p></div>
+        </section>
+
+        <section class="aireco-section" aria-labelledby="genT">
+          <h2 class="ai-genre-intro" id="genT">O elige un género para iniciar Radio continua</h2>
+          <ul class="ai-genre-grid" id="genGrid" aria-labelledby="genT"></ul>
+        </section>
+      </div>
+
+      <!-- Bienestar completo (bienestar.js se monta aquí al abrir la subpestaña) -->
+      <div class="rsub-pane" id="p-bienestar" role="tabpanel" aria-labelledby="rs-bienestar" tabindex="0" hidden></div>
+
+      <!-- Podcasts -->
+      <div class="rsub-pane" id="sp-podcasts" role="tabpanel" aria-labelledby="rs-podcasts" tabindex="0" hidden>
+        <section class="aireco-section" aria-labelledby="podT">
+          <div class="aireco-header">
+            <div class="aireco-title-wrap">
+              <img class="aireco-spark" src="/assets/emoji/1f399.svg" alt="" width="28" height="28">
+              <div>
+                <h2 class="aireco-title" id="podT">Podcasts para este momento</h2>
+                <p class="aireco-subtitle" id="podSub">Seleccionados según el momento del día</p>
+              </div>
+            </div>
+            <button type="button" class="aireco-refresh-btn" id="podAct" aria-label="Nuevos podcasts" title="Nuevos podcasts"><i class="fas fa-rotate-right" aria-hidden="true"></i></button>
+          </div>
+          <div class="aireco-carousel-wrap">
+            <button type="button" class="aireco-carousel-btn" id="podPrev" aria-controls="podCards" aria-label="Ver podcasts anteriores" title="Anteriores"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+            <div class="aireco-scroll" id="podScroll">
+              <ul class="aireco-cards" id="podCards" aria-labelledby="podT" aria-describedby="podSub"></ul>
+            </div>
+            <button type="button" class="aireco-carousel-btn" id="podNext" aria-controls="podCards" aria-label="Ver más podcasts" title="Más"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="pnl" id="p-buscar" aria-label="Buscar" hidden></section>
+    <section class="pnl" id="p-parati" aria-label="Para ti" hidden></section>
+    <section class="pnl" id="p-favoritos" aria-label="Favoritos" hidden></section>
+    <section class="pnl" id="p-naturaleza" aria-label="Naturaleza" hidden></section>
+    <section class="pnl" id="p-admin" aria-label="Administración" hidden></section>
+  </main>
+</div>
 
 <!-- Avisos (los lectores de pantalla los leen) -->
 <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<!-- Ahora suena: título, canal, género y los botones de siempre. Solo se ve cuando hay una canción. -->
-<section class="ahora" id="ahora" aria-label="Ahora suena" tabindex="-1" hidden>
-  <div class="ahora-info">
-    <p class="ahora-titulo" id="aTitulo"></p>
-    <p class="ahora-sub"><span id="aCanal"></span><span id="aGenero" class="ahora-gen"></span></p>
-    <p class="ahora-lista" id="aLista" hidden><span id="aListaTxt"></span> <button type="button" class="link" id="aSalirLista">Salir de la lista</button></p>
-  </div>
-  <div class="ahora-ctl" role="group" aria-label="Controles de la canción">
-    <button type="button" class="ico" id="bLike" aria-pressed="false" aria-label="Me gusta" title="Me gusta"></button>
-    <button type="button" class="ico play" id="bPlay" aria-label="Pausar" title="Pausar (espacio)" aria-keyshortcuts="Space"><svg width="26" height="26" aria-hidden="true"><use id="bPlayUse" href="#i-pause"/></svg></button>
-    <button type="button" class="ico" id="bNext" aria-label="Siguiente" title="Siguiente (N)" aria-keyshortcuts="N"><svg width="26" height="26" aria-hidden="true"><use href="#i-next"/></svg></button>
-    <button type="button" class="ico mas" id="bMas" aria-expanded="false" aria-controls="ahoraExtra" aria-label="Más opciones" title="Más opciones"><svg width="24" height="24" aria-hidden="true"><use href="#i-mas"/></svg></button>
-    <!-- En pantallas de 600 px o menos, .ahora-extra se esconde tras «Más opciones» (barra compacta). Va DESPUÉS del botón en el
-         código para que el orden del foco siga al visual (WCAG 2.4.3): lo que se despliega queda justo después de «Más opciones». -->
-    <div class="ahora-extra" id="ahoraExtra">
-      <button type="button" class="ico" id="bDislike" aria-pressed="false" aria-label="No me gusta" title="No me gusta"></button>
-      <button type="button" class="ico" id="bAdd" aria-haspopup="dialog" aria-label="Agregar a una playlist" title="Agregar a una playlist"></button>
-      <button type="button" class="ico" id="bLetra" aria-haspopup="dialog" aria-label="Letra" title="Letra (L)" aria-keyshortcuts="L"><svg width="24" height="24" aria-hidden="true"><use href="#i-letra"/></svg></button>
-      <button type="button" class="ico" id="bKaraoke" aria-haspopup="dialog" aria-label="Karaoke" title="Karaoke (K)" aria-keyshortcuts="K"><svg width="24" height="24" aria-hidden="true"><use href="#i-mic"/></svg></button>
-      <button type="button" class="ico" id="bVisual" aria-haspopup="dialog" aria-label="Visualizador" title="Visualizador"><svg width="24" height="24" aria-hidden="true"><use href="#i-vis"/></svg></button>
+<!-- ═══════════════ BARRA DE REPRODUCCIÓN ═══════════════ -->
+<section class="now-playing-bar" id="reproductor" aria-label="Reproductor" tabindex="-1">
+  <div class="player-left">
+    <div class="np-art" aria-hidden="true">
+      <img id="npArt" alt="" width="56" height="56" decoding="async" hidden>
+      <i class="fas fa-music np-art-ico" aria-hidden="true"></i>
+    </div>
+    <div class="np-data">
+      <p class="np-title" id="aTitulo">Elige qué escuchar</p>
+      <p class="np-sub"><span id="aCanal">DEACERO Play</span></p>
+      <p class="np-gen"><span class="ai-genre-pill" id="aGenero" hidden></span></p>
+      <p class="ahora-lista" id="aLista" hidden><span id="aListaTxt"></span> <button type="button" class="link" id="aSalirLista">Salir de la lista</button></p>
     </div>
   </div>
+
+  <div class="player-center">
+    <!-- El navegador no deja sonar sin un toque: este botón da ese toque -->
+    <button type="button" class="primary empezar" id="bEmpezar" hidden><i class="fas fa-play" aria-hidden="true"></i> Toca para empezar a escuchar</button>
+    <div class="player-controls-row" role="group" aria-label="Controles de la canción">
+      <button type="button" class="pbtn-aux" id="bPrev" aria-label="Anterior" title="Anterior"><i class="fas fa-backward-step" aria-hidden="true"></i></button>
+      <button type="button" class="pbtn" id="bPlay" aria-label="Pausar" title="Pausar (espacio)" aria-keyshortcuts="Space"><i class="fas fa-pause" id="bPlayIco" aria-hidden="true"></i></button>
+      <button type="button" class="pbtn-aux" id="bNext" aria-label="Siguiente" title="Siguiente (N)" aria-keyshortcuts="N"><i class="fas fa-forward-step" aria-hidden="true"></i></button>
+      <!-- En el celular las demás opciones van tras «Más opciones»; va ANTES de ellas en el código para que el foco siga al orden visual -->
+      <button type="button" class="pbtn-aux mas" id="bMas" aria-expanded="false" aria-controls="ahoraExtra" aria-label="Más opciones" title="Más opciones"><i class="fas fa-ellipsis" aria-hidden="true"></i></button>
+    </div>
+    <div class="np-progress-wrap">
+      <span class="np-time" id="tNow" aria-hidden="true">0:00</span>
+      <input type="range" class="np-progress" id="seek" min="0" max="1000" step="1" value="0" aria-label="Posición en la canción" aria-valuetext="Sin canción" disabled>
+      <span class="np-time" id="tDur" aria-hidden="true">–:––</span>
+    </div>
+  </div>
+
+  <div class="player-right" id="ahoraExtra">
+    <button type="button" class="icon-btn" id="bLike" aria-pressed="false" aria-label="Me gusta" title="Me gusta"><i class="fas fa-thumbs-up" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn" id="bDislike" aria-pressed="false" aria-label="No me gusta" title="No me gusta"><i class="fas fa-thumbs-down" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn" id="bAdd" aria-haspopup="dialog" aria-label="Agregar a una playlist" title="Agregar a una playlist"><i class="fas fa-plus" aria-hidden="true"></i></button>
+    <div class="np-vol" role="group" aria-label="Volumen">
+      <button type="button" class="icon-btn" id="bMute" aria-pressed="false" aria-label="Silenciar" title="Silenciar"><i class="fas fa-volume-high" id="bMuteIco" aria-hidden="true"></i></button>
+      <input type="range" class="np-vol-slider" id="vol" min="0" max="100" step="1" value="85" aria-label="Volumen" aria-valuetext="85 %">
+    </div>
+    <button type="button" class="icon-btn" id="bLetra" aria-haspopup="dialog" aria-label="Letra" title="Letra (L)" aria-keyshortcuts="L"><i class="fas fa-align-left" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn" id="bKaraoke" aria-haspopup="dialog" aria-label="Karaoke" title="Karaoke (K)" aria-keyshortcuts="K"><i class="fas fa-microphone-lines" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn" id="bVisual" aria-haspopup="dialog" aria-label="Visualizador" title="Visualizador"><i class="fas fa-chart-simple" aria-hidden="true"></i></button>
+    <button type="button" class="icon-btn" id="bNatura" aria-label="Naturaleza" title="Sonidos de naturaleza"><i class="fas fa-leaf" aria-hidden="true"></i></button>
+  </div>
 </section>
+
+<!-- ═══════════════ PESTAÑAS DE ABAJO (solo celular) ═══════════════ -->
+<nav class="mobile-tabbar" id="mobileTabbar" aria-label="Navegación inferior">
+  <button type="button" class="mtab" data-mtab="inicio" aria-current="page"><i class="fas fa-house" aria-hidden="true"></i><span>Inicio</span></button>
+  <button type="button" class="mtab" data-mtab="bienestar"><i class="fas fa-heart-pulse" aria-hidden="true"></i><span>Bienestar</span></button>
+  <button type="button" class="mtab" data-mtab="descubrir" aria-controls="sidebar" aria-expanded="false"><i class="fas fa-compact-disc" aria-hidden="true"></i><span>Descubrir</span></button>
+  <button type="button" class="mtab" data-mtab="biblioteca"><i class="fas fa-bars-staggered" aria-hidden="true"></i><span>Biblioteca</span></button>
+</nav>
 
 <!-- Selector de playlist para el botón + -->
 <dialog id="pickPl" aria-labelledby="pickTitle">
@@ -166,27 +308,30 @@
 <!-- Ayuda: atajos de teclado -->
 <dialog id="ayuda" aria-labelledby="ayudaTitle">
   <h2 id="ayudaTitle">Atajos de teclado</h2>
-  <p class="hint">Funcionan en todo el panel, salvo mientras escribes en un campo o cuando el foco está dentro del reproductor de la pestaña Radio.</p>
+  <p class="hint">Funcionan en todo el panel, salvo mientras escribes en un campo.</p>
   <dl class="atajos">
     <dt><kbd>Espacio</kbd></dt><dd>Reproducir o pausar</dd>
     <dt><kbd>N</kbd></dt><dd>Siguiente canción</dd>
     <dt><kbd>L</kbd></dt><dd>Letra de lo que suena</dd>
     <dt><kbd>K</kbd></dt><dd>Karaoke (letra grande)</dd>
     <dt><kbd>/</kbd></dt><dd>Buscar</dd>
-    <dt><kbd>1</kbd> a <kbd>9</kbd></dt><dd>Ir a la pestaña con ese número</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>En la barra de progreso: 5 segundos atrás o adelante (<kbd>Re Pág</kbd> / <kbd>Av Pág</kbd>: 30 segundos)</dd>
+    <dt><kbd>1</kbd> a <kbd>9</kbd></dt><dd>Ir a la sección del menú con ese número (1 Inicio, 2 Buscar, 3 Bienestar…)</dd>
     <dt><kbd>?</kbd></dt><dd>Esta ayuda</dd>
     <dt><kbd>Esc</kbd></dt><dd>Cerrar el cuadro abierto</dd>
   </dl>
   <!-- WCAG 2.1.4: los atajos de una sola tecla se pueden apagar (p. ej. para quien usa control por voz) -->
   <label class="check" for="atajosOn"><input type="checkbox" id="atajosOn" checked aria-describedby="atajosNota"><span>Usar atajos de una sola tecla</span></label>
-  <p class="hint" id="atajosNota">Apagados, ninguna tecla suelta hace nada (tampoco <kbd>?</kbd>); esta ayuda se abre con el botón «?» (Atajos de teclado) de arriba.</p>
+  <p class="hint" id="atajosNota">Apagados, ninguna tecla suelta hace nada (tampoco <kbd>?</kbd>); esta ayuda se abre con el botón de Ayuda de arriba.</p>
   <div class="row"><button type="button" class="primary" id="ayudaCerrar">Entendido</button></div>
 </dialog>
 
 <script src="/js/util.js"></script>
 <script src="/js/panel/logica.js"></script>
+<script src="/js/panel/radio-logica.js"></script>
 <script src="/js/panel/api.js"></script>
 <script src="/js/panel/nucleo.js"></script>
+<script src="/js/panel/inicio.js"></script>
 <script src="/js/panel/cuenta.js"></script>
 </body>
 </html>

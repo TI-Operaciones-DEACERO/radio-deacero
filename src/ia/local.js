@@ -2,6 +2,9 @@
 /* ia/local.js — recomendaciones SIN modelo y SIN red: reglas + las listas de data/seed. Son funciones puras: la misma semilla
  * (rng) da el mismo resultado, por eso se pueden probar. Sirven de motor propio y de respaldo cuando Gemini no responde. */
 
+/* Géneros curados (familiares para la planta) de los caracteres de Bienestar. */
+const FAMILIARES = new Set(Object.values(require('../bienestar').CARACTERES).flatMap((c) => c.ids));
+
 const norm = (s) => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 const FRANJAS = [[0, 4, 'madrugada'], [5, 11, 'mañana'], [12, 14, 'mediodía'], [15, 18, 'tarde'], [19, 23, 'noche']];
@@ -51,7 +54,12 @@ function ahora({ hour, genres, taste, recientes = [], rng = Math.random, n = 6 }
   const rec = new Set(recientes);
   const libre = (g) => !evitar.has(g.id) && !rec.has(g.id);
   const calmado = (g) => f !== 'madrugada' || (g.energy !== undefined ? g.energy <= 0.5 : true);
-  let cands = genres.filter((g) => libre(g) && moods.includes(g.mood) && calmado(g));
+  /* Familiares primero (destacados, los curados de Bienestar y lo que le gusta a la persona): de 479 géneros la mayoría son exóticos
+   * para la planta (Azonto, Khmer Pop…) y antes salían casi siempre. Solo si no alcanzan se usa el resto. */
+  const familiar = (g) => g.featured || FAMILIARES.has(g.id) || gustan.has(g.id);
+  let cands = genres.filter((g) => libre(g) && familiar(g) && moods.includes(g.mood) && calmado(g));
+  if (cands.length < n) cands = genres.filter((g) => libre(g) && familiar(g) && moods.includes(g.mood));
+  if (cands.length < n) cands = genres.filter((g) => libre(g) && moods.includes(g.mood) && calmado(g));
   if (cands.length < n) cands = genres.filter((g) => libre(g) && moods.includes(g.mood));
   if (cands.length < n) cands = genres.filter(libre);
   const pick = weightedSample(cands, (g) => (g.featured ? 2 : 1) * (gustan.has(g.id) ? 3 : 1), n, rng);
