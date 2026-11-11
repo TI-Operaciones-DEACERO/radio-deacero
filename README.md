@@ -64,14 +64,16 @@ Para que la Pi arranque en la vista kiosco: `~/DEACEROPLAY-lite/deploy/install-a
 Se ve y se usa como el **DEACERO Play anterior** (negro, tarjetas #242424, naranja, Inter y Font Awesome auto-hospedados en `public/assets/vendor/`, licencias en `LICENCIAS.txt`):
 **barra lateral** (Inicio, Buscar, Bienestar, Naturaleza; *Tu Música*: Historial, Favoritos y playlists, Para ti; *Descubrir*: 9 atajos de género que arrancan la radio continua;
 abajo *Administración*, solo con acceso; se puede contraer), **barra superior** (buscador, Apariencia, Ayuda y cuenta) y **barra de reproducción** abajo (portada, título,
-género, anterior / play / siguiente, progreso que se puede mover, Me gusta / No me gusta / playlist, volumen, letra, karaoke, visualizador y naturaleza; si el navegador no deja
-sonar sin un toque aparece «Toca para empezar a escuchar»). **Inicio es la radio**: subpestañas *Recomendado* (carrusel «Mira lo que la IA tiene para ti», Bienestar rápido
-y géneros destacados), *Bienestar* y *Podcasts*. En el celular (≤ 768 px) no hay barra lateral: abajo van la barra compacta y las pestañas Inicio, Bienestar, Descubrir (el menú) y Biblioteca.
+género, anterior / play / siguiente, progreso que se puede mover, Me gusta / No me gusta / playlist, volumen, letra, karaoke, visualizador, naturaleza y **Ver video**; si el navegador no deja
+sonar sin un toque, la música arranca con el primer clic que se haga en el panel). **Inicio es la radio**: subpestañas *Recomendado* (carrusel «Mira lo que la IA tiene para ti», Bienestar rápido
+y géneros destacados), *Bienestar* y *Podcasts* (temas sugeridos y, debajo, sus episodios con portada: *Escuchar* o *Ver video*). Mientras se busca o la IA
+piensa aparece una **capa de carga grande** («Pensando…», «Buscando lo mejor para recomendarte»; se quita sola al sonar y tiene «Ocultar»). **Ver video** muestra
+el video (sin sonido propio, sigue al audio) de lo que suena; solo se pide mientras está abierto. En el celular (≤ 768 px) no hay barra lateral: abajo van la barra compacta y las pestañas Inicio, Bienestar, Descubrir (el menú) y Biblioteca.
 El **motor de audio** es un iframe oculto (`/?view=local&mode=audio&sid=…`) que se crea una vez: navegar no corta la música. Cada módulo pesado se descarga al abrir su vista.
 Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno nuevo, corre `node scripts/recortar-iconos.js` (la prueba `panel-iconos` lo exige).
 
 - **Cuenta (opcional):** se entra solo con el **número de nómina** (4–10 dígitos), sin contraseña; sin cuenta todo suena igual. La cuenta guarda Me gusta / No me gusta,
-  playlists, historial, tema y gustos. **Las cuentas no se pueden borrar desde la app** (se pueden descargar los datos propios); el administrador las desactiva.
+  playlists, historial, tema y gustos. **Sin cuenta**, Me gusta, historial y playlists se guardan en ese navegador (`localStorage`); al entrar, los Me gusta se pasan a la cuenta. **Las cuentas no se pueden borrar desde la app** (se pueden descargar los datos propios); el administrador las desactiva.
   Si existe `DATA_DIR/nominas-permitidas.txt` (una nómina por línea) solo esas entran; si no, entra cualquiera (el arranque lo avisa).
 - **No me gusta** de verdad: los géneros que alguien rechaza dejan de salir en *su* rotación (no en la de los demás).
 - **Para ti / IA:** recomendado ahora, hecho para ti, descubrir, artistas, podcasts y playlists. Usa **Gemini** si hay `GEMINI_KEY` (límite de 30/min y 1500/día,
@@ -82,10 +84,13 @@ Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno
   (estrés → soft rock/pop suave; enojo → rock; tristeza → baladas y boleros) y se pasa al del destino (relajar → lo-fi, acústico, bossa; dormir → instrumental;
   concentrarse → estudio, clásica, jazz; energía → pop, rock, cumbia, electrónica). Un viaje para calmar nunca pasa por música de fiesta o agresiva.
   Las canciones de cada fase se buscan con su tono (*relaxing*, *focus*, *upbeat*…), y la fase siguiente se prepara antes de que toque.
-- **Velocidad:** al oyente del panel la canción se le da **directo** (sin la comprobación previa que sí hacen las pantallas; si una falla, el reproductor
-  reintenta y salta) y se prefieren canciones ya resueltas. El **calentador** tiene listos los géneros destacados y los que la gente está oyendo:
+- **Velocidad:** al oyente del panel se le da al instante una canción ya resuelta por el calentador; si no hay, se comprueban **3 a la vez** y gana la
+  primera que suena (las otras quedan listas). Nunca recibe una que no suena. Lo que la persona pide gana: las precargas «siguiente» que esperaban en fila se
+  descartan (`409 STALE`) en vez de hacerla esperar. El **calentador** tiene listos los géneros destacados y los que la gente está oyendo:
   medido en la pantalla Windows, cambiar a un género preparado tarda ~0.2 s hasta sonar, contra ~7 s sin preparar.
-- **Buscar:** lista de resultados; ▶ toca una vez y luego sigue la radio.
+- **Buscar y canciones elegidas:** al tocar una búsqueda o una canción (Buscar, Recomendado, historial), **siguiente** trae más de esa búsqueda o del mismo
+  artista (racha de 4–6, `/api/next?semilla=`), y después sigue la radio. En un viaje de Bienestar la búsqueda es pauta única (el viaje sigue). En las pantallas
+  la búsqueda sigue siendo pauta única.
 - **Letra y Karaoke** a pantalla completa (sincronizada si lrclib la tiene; si no, desplazamiento proporcional estimado).
 - **Naturaleza:** lluvia, olas, viento, bosque, ruido rosa y marrón **sintetizados** en el navegador (sin archivos ni red), mezclables, con suavizado, espacio y temporizador.
 - **Visualizador** (8 modos): animación **decorativa** (no analiza el audio: hacerlo exigiría tocar el `<audio>` del motor). Arranca quieto en equipos lentos y con «reducir movimiento».
@@ -184,7 +189,7 @@ servidor (el estado del radio —género y recientes— es uno solo). Está pens
 | API | |
 |---|---|
 | `POST /api/cmd` | `{cmd: toggle/play/pause/next/prev/random/mute/lyrics}` · `{cmd:'genre',id}` · `{cmd:'volume',set/delta}` · `{cmd:'mode',mode}` · `{cmd:'search',q}` (el motor también acepta `{cmd:'seek',t}` en segundos, que usa la barra de progreso de `/panel`) |
-| | `{cmd:'track',kind:'podcast'\|'search',track:{id,title,channel,duration}}` toca un episodio/canción concreta (pauta única) |
+| | `{cmd:'track',kind:'podcast'\|'search',track:{id,title,channel,duration}}` toca un episodio/canción concreta (en pantallas, pauta única; en el panel, lo que sigue es del mismo artista) |
 | `GET /api/state` | qué suena, pausa, volumen, modo, pantallas conectadas |
 | `GET/POST /api/podcasts`, `DELETE /api/podcasts/:id` | podcasts guardados (`{name, q}`) |
 | `GET /api/podcast/search?q=` | episodios (5 min – 4 h) |

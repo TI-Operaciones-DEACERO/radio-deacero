@@ -73,6 +73,85 @@
     toastTimer = setTimeout(() => { t.classList.remove('show'); t.textContent = ''; }, ms || 4000);
   }
 
+  /* — cargando: capa grande mientras se busca o piensa la IA (sustituye a los avisos «Buscando…», «Iniciando…», «Reproduciendo…») — */
+  let carga = null;
+  const anunciar = (txt) => { const el = $('srAhora'); el.textContent = R.textoAnuncio(el.textContent, txt); };
+  /* La capa no debe quedar debajo de la barra (ni de «Más opciones» en el celular): se mide lo que ocupa. */
+  function medirBarra() {
+    const tops = ['reproductor', 'mobileTabbar'].map((id) => $(id)).filter((el) => el && el.offsetParent !== null).map((el) => el.getBoundingClientRect().top);
+    document.documentElement.style.setProperty('--barra-alto', R.altoBarra(window.innerHeight, tops.length ? Math.min.apply(null, tops) : NaN) + 'px');
+  }
+  window.addEventListener('resize', medirBarra);
+  function mostrarCarga(txt, sub, opc) {
+    medirBarra();
+    const s = estado;
+    carga = { t0: Date.now(), id: s && s.track ? s.track.id : '', vioCarga: false, ia: !!(opc && opc.ia) };
+    $('carga').hidden = false;
+    $('cargaTxt').textContent = txt;
+    $('cargaSub').textContent = sub || '';
+    anunciar(txt);
+  }
+  /* La IA ya respondió: ahora se espera la música (misma capa, otro texto). */
+  function cargandoMusica(txt, sub) { if (!carga) return mostrarCarga(txt, sub); carga.ia = false; carga.t0 = Date.now(); $('cargaTxt').textContent = txt; $('cargaSub').textContent = sub || ''; anunciar(txt); }
+  /* La capa también sale sola cuando el motor busca tras un Siguiente/Anterior (cola vacía): ver PanelRadio.cargaSola.
+     sola = { desde: cuándo empezó a buscar el motor, pedido: último Siguiente/Anterior, descartada: ya se quitó en esta búsqueda } */
+  const sola = { desde: 0, pedido: 0, descartada: false };
+  function finCarga() {
+    if (!carga) return;
+    const tenia = $('carga').contains(document.activeElement);
+    carga = null;
+    sola.descartada = true; /* «Ocultar» o el tope de 90 s: no vuelve a salir sola mientras siga ESTA búsqueda */
+    $('carga').hidden = true;
+    if (tenia) $('vista').focus();
+  }
+  function revisarCarga(s) {
+    const cargando = !!(s && s.loading);
+    if (!cargando) { sola.desde = 0; sola.descartada = false; } else if (!sola.desde) sola.desde = Date.now();
+    if (!carga) {
+      if (!R.escribiendo(document.activeElement) && R.cargaSola({ cargando, desde: sola.desde, ahora: Date.now(), pedido: sola.pedido, descartada: sola.descartada })) { mostrarCarga('Buscando música…'); carga.vioCarga = true; }
+      return;
+    }
+    if (cargando) carga.vioCarga = true;
+    if (R.cargaTermina(carga, s, Date.now())) finCarga();
+  }
+  $('cargaOcultar').addEventListener('click', finCarga);
+
+  /* — visor de video: el video (sin sonido) de lo que suena, siguiendo al audio del motor. Solo se pide mientras está abierto. — */
+  const visor = $('visor'), vv = $('visorVideo');
+  function abrirVideo() {
+    medirBarra();
+    visor.hidden = false;
+    $('bVideo').setAttribute('aria-pressed', 'true');
+    seguirVideo(estado);
+    $('visorCerrar').focus();
+  }
+  function cerrarVideo(volverFoco) {
+    if (visor.hidden) return;
+    visor.hidden = true;
+    $('bVideo').setAttribute('aria-pressed', 'false');
+    vv.pause(); vv.removeAttribute('src'); vv.removeAttribute('poster'); vv.dataset.id = ''; vv.load();
+    if (volverFoco) $('bVideo').focus();
+  }
+  function seguirVideo(s) {
+    if (visor.hidden) return;
+    const t = s && s.track;
+    $('visorTitulo').textContent = t ? t.title || '' : 'Todavía no suena nada.';
+    if (!t) return;
+    if (vv.dataset.id !== t.id) {
+      vv.dataset.id = t.id;
+      $('visorAviso').hidden = true;
+      vv.poster = '/api/thumb/' + encodeURIComponent(t.id);
+      vv.src = '/api/play/' + encodeURIComponent(t.id) + '?mode=video';
+    }
+    if (s.paused) { if (!vv.paused) vv.pause(); return; }
+    if (vv.readyState >= 1 && Number.isFinite(s.time) && Math.abs(vv.currentTime - s.time) > 0.6) { try { vv.currentTime = s.time; } catch (_) { /* sin seek */ } }
+    if (vv.paused) vv.play().catch(() => {});
+  }
+  vv.addEventListener('error', () => { if (vv.getAttribute('src')) $('visorAviso').hidden = false; });
+  $('bVideo').addEventListener('click', () => { if (visor.hidden) abrirVideo(); else cerrarVideo(true); });
+  $('visorCerrar').addEventListener('click', () => cerrarVideo(true));
+  visor.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); cerrarVideo(true); } });
+
   /* — sesión del oyente: por pestaña (sessionStorage 'pl_sid', la misma que usa /panel/simple); el servidor lleva aparte su racha — */
   let sidLocal = '';
   function sid() {
@@ -100,7 +179,9 @@
   document.body.appendChild(motor);
   /* El motor avisa con mensajes («Buscando música…», errores): se muestran como avisos del panel. */
   window.addEventListener('message', (e) => {
-    if (e.origin === location.origin && e.source === motor.contentWindow && e.data && e.data.type === 'toast' && typeof e.data.msg === 'string') toast(e.data.msg.slice(0, 200), e.data.ms);
+    if (e.origin !== location.origin || e.source !== motor.contentWindow || !e.data || e.data.type !== 'toast' || typeof e.data.msg !== 'string') return;
+    if (/^No |Saltando|fallaron/.test(e.data.msg)) finCarga(); /* el motor avisa un error: el loader se quita y queda el aviso */
+    toast(e.data.msg.slice(0, 200), e.data.ms);
   });
 
   function player() {
@@ -120,6 +201,7 @@
   async function send(cmd) {
     const p = await esperarMotor();
     if (!p) { toastError('El reproductor todavía está cargando. Inténtalo de nuevo en un momento.'); return false; }
+    if (cmd && (cmd.cmd === 'next' || cmd.cmd === 'prev')) sola.pedido = Date.now();
     try { p.handleCommand(cmd); } catch (_) { toastError('No se pudo enviar la orden al reproductor.'); return false; }
     setTimeout(tick, 350);
     return true;
@@ -135,13 +217,15 @@
     renderBarra(s);
     renderProgreso(s);
     marcarSonando(s);
+    revisarCarga(s);
+    seguirVideo(s);
     const id = s && s.track ? s.track.id : '';
     if (id !== ultimoId) { ultimoId = id; bus.dispatchEvent(new CustomEvent('track', { detail: s })); }
     bus.dispatchEvent(new CustomEvent('state', { detail: s }));
     registrarHistorial(s);
     if (esperaAnuncio && s && s.track) { /* el usuario pidió Siguiente/Anterior: se avisa cuál suena (los cambios solos no se anuncian) */
       if (Date.now() - esperaAnuncio.t0 > 20000) esperaAnuncio = null;
-      else if (s.track.id !== esperaAnuncio.id) { toast('Ahora suena: ' + s.track.title); esperaAnuncio = null; }
+      else if (s.track.id !== esperaAnuncio.id) { anunciar('Ahora suena: ' + s.track.title); esperaAnuncio = null; }
     }
   }
   setInterval(tick, 1000);
@@ -151,9 +235,9 @@
   const on = (ev, fn) => bus.addEventListener(ev, (e) => fn(e.detail));
   const emit = (ev, detail) => bus.dispatchEvent(new CustomEvent(ev, { detail }));
 
-  /* Historial: una vez por canción que empieza a sonar, solo con cuenta. Si falla no se molesta a nadie. */
+  /* Historial: una vez por canción que empieza a sonar (con cuenta, en la cuenta; sin ella, en este navegador). Si falla no se molesta a nadie. */
   async function registrarHistorial(s) {
-    if (!user || !s || !s.track || s.paused || !L.shouldLogHistory(ultimoRegistrado, s.track)) return;
+    if (!s || !s.track || s.paused || !L.shouldLogHistory(ultimoRegistrado, s.track)) return;
     const t = L.trackConGenero(s);
     if (!t) return;
     ultimoRegistrado = t.id;
@@ -192,6 +276,7 @@
 
   async function alCambiarUsuario(u) {
     user = u || null;
+    if (A.usarCuenta) A.usarCuenta(!!user); /* sin nómina, historial y playlists en este navegador */
     ultimoRegistrado = '';
     if (!user) { mapa = L.parseLocalLikes(store.get(LS_LIKES)); emit('reacciones'); renderBarra(estado, true); emit('usuario', null); return; }
     const local = L.parseLocalLikes(store.get(LS_LIKES));
@@ -241,7 +326,6 @@
     $('bPlayIco').className = 'fas ' + (pausa ? 'fa-play' : 'fa-pause');
     $('bPlay').setAttribute('aria-label', pausa ? 'Reproducir' : 'Pausar');
     $('bPlay').title = pausa ? 'Reproducir (espacio)' : 'Pausar (espacio)';
-    $('bEmpezar').hidden = !(s && s.blocked);
     $('bLike').setAttribute('aria-pressed', String(r === 'like'));
     $('bDislike').setAttribute('aria-pressed', String(r === 'dislike'));
     /* los nombres de Me gusta y No me gusta son fijos; solo cambia aria-pressed */
@@ -327,10 +411,15 @@
   const pedirOtra = (cmd) => { esperaAnuncio = { id: estado && estado.track ? estado.track.id : '', t0: Date.now() }; send({ cmd }); };
   $('bNext').addEventListener('click', () => pedirOtra('next'));
   $('bPrev').addEventListener('click', () => pedirOtra('prev'));
-  /* El navegador no deja sonar sin un toque: este botón ES el toque (el motor tiene allow="autoplay"). */
-  $('bEmpezar').addEventListener('click', async () => {
-    if (await send({ cmd: 'play' })) { $('bEmpezar').hidden = true; $('bPlay').focus(); }
-  });
+  /* El navegador no deja sonar sin un toque: CUALQUIER toque o tecla dentro del panel es ese toque (el motor tiene allow="autoplay").
+     Va en fase de captura y de forma síncrona para que cuente como gesto de la persona; el play/pausa ya lo maneja su propio botón. */
+  const desbloquear = (e) => {
+    if (e.target && e.target.closest && e.target.closest('#bPlay')) return;
+    const p = player();
+    if (p && p.unlock) { try { p.unlock(); } catch (_) { /* motor cargando */ } }
+  };
+  document.addEventListener('pointerdown', desbloquear, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') desbloquear(e); }, true);
   $('skipAhora').addEventListener('click', (e) => { e.preventDefault(); $('reproductor').focus(); });
   /* «Saltar al contenido»: sin cambiar la dirección (#vista no es una sección: el aviso de hashchange llevaría a Inicio) y, en el
      celular, cerrando antes el menú (con él abierto el contenido está inert y no recibe el foco). */
@@ -341,6 +430,7 @@
     const abierta = $('bMas').getAttribute('aria-expanded') !== 'true';
     $('bMas').setAttribute('aria-expanded', String(abierta));
     document.body.classList.toggle('barra-abierta', abierta);
+    medirBarra();
   });
 
   /* ─────────────── selector de playlist (botón +) ─────────────── */
@@ -350,7 +440,6 @@
   const pickErr = (t, campo) => { if (campo || !t) errorCampo($('pickNombre'), $('pickErr'), t); else { $('pickErr').textContent = t; $('pickErr').hidden = false; } };
 
   async function abrirSelector(track) {
-    if (!user) { toast('Para guardar en playlists entra con tu nómina.'); if (window.PlayCuenta) window.PlayCuenta.abrir(); return; }
     pickTrack = track;
     pickErr('');
     $('pickSong').textContent = track.title;
@@ -536,7 +625,7 @@
 
   /* Descubrir: cada atajo arranca la radio continua de su género. */
   function radioGenero(id, label) {
-    toast('Iniciando la radio de ' + label + '…', 2500);
+    mostrarCarga('Preparando ' + label, 'Buscando canciones que sí se pueden reproducir…');
     return send({ cmd: 'genre', id });
   }
   $('descubrir').replaceChildren(...R.DESCUBRIR.map((d) => {
@@ -764,7 +853,7 @@
   /* Para las vistas */
   window.Panel = {
     h, emo, icono, fa, errorCampo, toast, toastError, store, tablist, vistas, modulos, L, R, api: A,
-    sid, player, send, on, emit, ir, cuandoCargue, radioGenero,
+    sid, player, send, on, emit, ir, cuandoCargue, radioGenero, cargando: mostrarCarga, cargandoMusica, finCarga, abrirVideo,
     remarcarSonando: () => { generoMarcado = null; marcarSonando(estado); },
     estado: () => estado,
     usuario: () => user,

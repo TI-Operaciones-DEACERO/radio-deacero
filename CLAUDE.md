@@ -25,7 +25,7 @@ La prueba «la matriz entera tarda poco» (test/bienestar.test.js) mide tiempo: 
 | `server.js` | arranque: crea y conecta todo (env, yt-dlp, radio, IA, calentador, horario, anuncios) |
 | `src/policy.js` | **tabla ÚNICA** de rutas: método, nivel (`publico`/`oyente`/`usuario`/`clave`), `needs:'sid'`, tope de cuerpo. Ruta nueva = fila nueva aquí (hay prueba de cobertura) |
 | `src/server.js` | HTTP: Host permitido, Origin=Host en escrituras, nivel, límites de ritmo, estáticos y CSP del panel |
-| `src/radio.js` | elige género/canción por sesión (`sid`); la sesión principal = pantallas. Pantallas **sondean** cada pista; oyentes la reciben **directo** |
+| `src/radio.js` | elige género/canción por sesión (`sid`); la sesión principal = pantallas. Oyente: búsqueda/canción elegida → racha «semilla» (más como esto); lo pedido descarta precargas en fila (`STALE`); comprueba 3 a la vez. Toda pista se **sondea** antes de darla; el oyente recibe **al instante** una ya resuelta por el calentador si la hay (darle pistas sin comprobar = «Reintentando…» y saltos) |
 | `src/calentador.js` | precalienta (busca + resuelve) géneros en segundo plano: es lo que hace instantáneo el cambio de género |
 | `src/bienestar.js` | Viaje ISO: curva de energía + **CARACTERES** curados por fase (la energía de `genres.json` es gruesa: no elegir solo por número) |
 | `src/ia/` | Gemini (`GEMINI_KEY`, solo por cabecera) con respaldo local automático; el local prefiere géneros familiares |

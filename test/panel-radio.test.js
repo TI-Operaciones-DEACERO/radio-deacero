@@ -158,3 +158,28 @@ test('generoSonando: el id del género de la radio (no las búsquedas, podcasts 
   assert.equal(R.generoSonando({ genre: { id: 'lista' } }), '');
   assert.equal(R.generoSonando(null), '');
 });
+
+test('cargaTermina: el loader se va cuando suena otra canción, cuando el motor dejó de cargar sin lograrlo, o a los 90 s', () => {
+  const R2 = require('../public/js/panel/radio-logica.js');
+  const c = { t0: 1000, id: 'viejaviejav', vioCarga: false };
+  assert.equal(R2.cargaTermina(c, { track: { id: 'viejaviejav' }, loading: true }, 1500), false, 'sigue buscando');
+  assert.equal(R2.cargaTermina(c, { track: { id: 'nuevanuevan' }, loading: false }, 3000), true, 'ya suena otra');
+  assert.equal(R2.cargaTermina({ t0: 1000, id: 'x', vioCarga: true }, { track: { id: 'x' }, loading: false }, 5000), true, 'terminó sin canción nueva (error)');
+  assert.equal(R2.cargaTermina({ t0: 1000, id: 'x', vioCarga: false }, { track: { id: 'x' }, loading: false }, 1400), false, 'aún no empieza a cargar');
+  assert.equal(R2.cargaTermina({ t0: 1000, id: 'x', vioCarga: false }, null, 92000), true, 'tope de 90 s');
+  assert.equal(R2.cargaTermina({ t0: 1000, id: '', vioCarga: false, ia: true }, { track: null, loading: false }, 30000), false, 'una consulta a la IA sin canción aún no termina sola');
+});
+
+/* Capa «Buscando música…» que aparece SOLA (el motor busca sin que el panel haya mostrado un loader): antes salía al abrir la página
+   (precarga del arranque, sin que la persona pidiera nada) y «Ocultar» no servía: volvía al segundo, y otra vez al pasar los 90 s. */
+test('cargaSola: solo tras Siguiente/Anterior de la persona, pasados 700 ms, y no vuelve si se ocultó en esta misma búsqueda', () => {
+  const base = { cargando: true, desde: 10000, pedido: 9900, descartada: false };
+  assert.equal(R.cargaSola({ ...base, ahora: 10500 }), false, 'aún no pasan 700 ms');
+  assert.equal(R.cargaSola({ ...base, ahora: 10800 }), true, 'la persona pidió Siguiente y tarda');
+  assert.equal(R.cargaSola({ ...base, pedido: 0, ahora: 30000 }), false, 'precarga del arranque: nadie pidió nada, no se tapa la pantalla');
+  assert.equal(R.cargaSola({ ...base, desde: 200000, pedido: 1000, ahora: 230000 }), false, 'la pidió hace mucho (p. ej. terminó la canción sola): no se tapa');
+  assert.equal(R.cargaSola({ ...base, pedido: 12000, ahora: 13000 }), true, 'pidió Siguiente mientras el motor ya buscaba: se le muestra');
+  assert.equal(R.cargaSola({ ...base, descartada: true, ahora: 99999 }), false, 'la ocultó (o pasaron los 90 s): no vuelve en esta búsqueda');
+  assert.equal(R.cargaSola({ ...base, cargando: false, ahora: 30000 }), false, 'ya no busca');
+  assert.equal(R.cargaSola({ ...base, desde: 0, ahora: 30000 }), false, 'sin inicio conocido');
+});

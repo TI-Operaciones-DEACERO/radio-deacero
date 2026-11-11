@@ -26,8 +26,11 @@
     history: U.createHistory(50),
     genres: [],
     loading: false,
+    carga: 0,           /* número de la carga vigente: lo que elige la persona abre una nueva y la anterior, al volver, se tira */
     failures: 0,
     toppingUp: false,
+    gen: 0,             /* sube con cada elección de la persona: lo pedido antes (precargas en vuelo) ya no entra en la cola */
+    semilla: '',        /* «más como esto» pendiente: la primera precarga tras una canción elegida la lleva */
     plan: null,         /* cola externa (orden 'queue' de /panel/completo): { items, i } o null */
     seeking: false,
     lyrics: { open: false, lines: null, idx: -1, timer: 0 }
@@ -67,16 +70,19 @@
     if (opts && opts.genre) q.set('genre', opts.genre);
     if (opts && opts.change) q.set('change', '1');
     if (opts && opts.query) q.set('q', opts.query);
+    if (opts && opts.semilla) q.set('semilla', opts.semilla);
     if (SID) q.set('sid', SID);
     return getJson('/api/next' + (q.toString() ? '?' + q : ''));
   }
 
-  /* Reintenta con espera creciente: sin conexión no se queda mudo ni rompe nada. */
-  async function fetchNextPatient(opts) {
+  /* Reintenta con espera creciente: sin conexión no se queda mudo ni rompe nada. Con «yo»: si mientras tanto la persona eligió
+     otra cosa (otra carga), deja de intentar y devuelve null. */
+  async function fetchNextPatient(opts, yo) {
     for (let i = 0; ; i++) {
+      if (yo !== undefined && yo !== state.carga) return null;
       try { return await fetchNext(opts); }
       catch (e) {
-        if (e.status === 400) throw e;
+        if (e.status === 400 || e.status === 409) throw e;
         setStatus('Sin conexión con YouTube — reintentando…');
         await sleep(Math.min(3000 * (i + 1), 30000));
       }
@@ -89,13 +95,22 @@
     fetch(playUrl(item.track.id, 'video'), { headers: { range: 'bytes=0-0' } }).then((r) => r.body && r.body.cancel()).catch(() => {});
   }
 
+  /* Precarga 2 pistas. Si mientras tanto la persona eligió otra cosa (gen cambió), lo que llega ya no sirve: se tira y se precarga de nuevo. */
   async function topUp() {
-    if (state.toppingUp) return;
-    state.toppingUp = true;
+    const gen = state.gen;
+    if (state.toppingUp === gen) return;
+    state.toppingUp = gen;
     try {
-      while (state.queue.length < 2) state.queue.push(await fetchNext());
+      while (state.queue.length < 2) {
+        const semilla = state.semilla;
+        const item = await fetchNext(semilla ? { semilla } : undefined);
+        if (gen !== state.gen) return;
+        if (semilla && state.semilla === semilla) state.semilla = '';
+        state.queue.push(item);
+      }
     } catch (_) { /* se reintenta en la siguiente pista */ }
-    state.toppingUp = false;
+    finally { if (state.toppingUp === gen) state.toppingUp = false; }
+    if (gen !== state.gen) return;
     warmVideo(state.queue[0]);
     renderUpNext();
   }
@@ -184,24 +199,33 @@
     if (state.lyrics.open) loadLyrics();
   }
 
+  /* Una carga a la vez, pero lo que elige la persona (género, búsqueda, canción, lista) no espera a la anterior: abre otra y la vieja,
+     al volver, ve que ya no es la vigente y no toca nada. Antes esas órdenes se descartaban si, p. ej., la precarga del arranque
+     seguía buscando (red lenta o sin YouTube): la persona tocaba y no pasaba nada. */
+  function abrirCarga(ocupado) { state.loading = true; if (ocupado) setBusy(true); return ++state.carga; }
+  function cerrarCarga(yo) { if (yo === state.carga) { state.loading = false; setBusy(false); } }
+  const vigente = (yo) => yo === state.carga;
+
   async function advance() {
-    if (state.loading) return;
-    state.loading = true;
+    if (state.loading) return; /* «siguiente» dos veces seguidas no salta dos canciones */
+    const yo = abrirCarga(false);
+    const antes = state.current;
     try {
-      if (state.current) state.history.push(state.current);
-      if (state.plan) { setBusy(true); if (await playPlan(state.plan.i + 1)) return; } /* siguiente de la lista; al acabar, sigue la radio */
+      if (state.plan) { if (antes) state.history.push(antes); setBusy(true); if (await playPlan(state.plan.i + 1)) return; } /* siguiente de la lista; al acabar, sigue la radio */
+      else if (antes) state.history.push(antes);
       if (!state.queue.length) setBusy(true);
-      const item = state.queue.shift() || await fetchNextPatient();
+      const item = state.queue.shift() || await fetchNextPatient(undefined, yo);
+      if (!item || !vigente(yo)) return; /* la persona eligió otra cosa mientras se buscaba */
       playItem(item);
       topUp();
-    } finally { state.loading = false; setBusy(false); }
+    } finally { cerrarCarga(yo); }
   }
 
   function prev() {
     if (state.plan) { /* dentro de una lista: reinicia la pista o vuelve a la anterior de la lista */
       if (media.currentTime > 3 || state.plan.i === 0 || state.loading) { media.currentTime = 0; return; }
-      state.loading = true; setBusy(true);
-      playPlan(state.plan.i - 1).finally(() => { state.loading = false; setBusy(false); });
+      const yo = abrirCarga(true);
+      playPlan(state.plan.i - 1).finally(() => cerrarCarga(yo));
       return;
     }
     if (media.currentTime > 3 || state.history.size() === 0) { media.currentTime = 0; return; }
@@ -213,21 +237,22 @@
   /* Un solo intento: si falla se avisa y se sigue con lo que suena. */
   /* keepQueue: pauta única (búsqueda): la cola y la racha se quedan como estaban. */
   async function switchTo(opts, { keepQueue = false } = {}) {
-    if (state.loading) return;
-    state.loading = true;
-    setBusy(true);
+    const yo = abrirCarga(true);
+    if (!keepQueue) { state.gen++; state.semilla = ''; }
     try {
       const item = await fetchNext(opts);
+      if (!vigente(yo)) return; /* llegó tarde: ya se eligió otra cosa */
       if (!keepQueue) state.queue.length = 0;
       if (state.current) state.history.push(state.current);
       playItem(item);
       topUp();
     } catch (_) {
-      toast(opts.query ? 'No encontré resultados que se puedan reproducir.' : 'No se encontró música para ese género. Prueba otro.');
-    } finally { state.loading = false; setBusy(false); renderUpNext(); }
+      if (vigente(yo)) toast(opts.query ? 'No encontré resultados que se puedan reproducir.' : 'No se encontró música para ese género. Prueba otro.');
+    } finally { cerrarCarga(yo); renderUpNext(); }
   }
   const changeGenre = (id) => switchTo(id ? { genre: id } : { change: true });
-  const playQuery = (q) => switchTo({ query: q }, { keepQueue: true });
+  /* En una pantalla la búsqueda es pauta única (la lista sigue como iba); en el panel lo que sigue sale de esa búsqueda (el servidor lleva la racha). */
+  const playQuery = (q) => switchTo({ query: q }, { keepQueue: !LOCAL });
 
   /* Un episodio o canción concreta (viene del control remoto): suena ahora y la lista sigue como estaba. */
   const KIND_GENRE = {
@@ -235,8 +260,11 @@
     search: { id: 'search', label: 'Búsqueda', emoji: '🔎', color: '#F59B23' }
   };
   function playTrackOnce(track, kind) {
-    if (state.loading) return;
+    cerrarCarga(abrirCarga(false)); /* suena ya: lo que se estuviera buscando queda sin efecto */
     if (state.current) state.history.push(state.current);
+    if (LOCAL && kind !== 'podcast') { /* panel: lo que sigue es «más como esto» (mismo artista), no lo que había en la cola */
+      state.gen++; state.queue.length = 0; state.semilla = U.semillaDe(track);
+    }
     playItem({ track, genre: Object.assign({}, KIND_GENRE[kind] || KIND_GENRE.search), genreChanged: true });
     topUp();
   }
@@ -262,16 +290,15 @@
   async function startPlan(rawItems, index) {
     state.plan = null;
     const items = U.cleanQueueItems(rawItems);
-    if (!items.length || state.loading) return;
-    state.loading = true;
-    setBusy(true);
+    if (!items.length) return;
+    const yo = abrirCarga(true);
     try {
-      state.queue.length = 0;
+      state.gen++; state.semilla = ''; state.queue.length = 0;
       if (state.current) state.history.push(state.current);
       state.plan = { items, i: 0 };
       const start = Number.isInteger(index) && index >= 0 && index < items.length ? index : 0;
-      if (!(await playPlan(start))) toast('No encontré nada que se pueda reproducir en esa lista.');
-    } finally { state.loading = false; setBusy(false); renderUpNext(); }
+      if (!(await playPlan(start)) && vigente(yo)) toast('No encontré nada que se pueda reproducir en esa lista.');
+    } finally { cerrarCarga(yo); renderUpNext(); }
   }
 
   function toggle() { if (media.paused) startPlayback(); else media.pause(); }
@@ -647,9 +674,12 @@
   /* Interfaz para /panel (mismo origen): órdenes directas y el estado con la misma forma que /api/state. */
   window.__player = {
     handleCommand,
+    /* /panel la llama DENTRO de cada toque de la persona: si el navegador había bloqueado el sonido, la música arranca con ese mismo
+       toque (sin botón «Toca para empezar» ni darle play aparte). Sin bloqueo no hace nada. */
+    unlock() { if (!$('start').hidden && media.getAttribute('src')) startPlayback(); },
     getState() {
       const cur = state.current;
-      return { players: 1, blocked: !$('start').hidden, paused: media.paused, muted: media.muted || Number(vol.value) === 0, volume: Number(vol.value), mode: state.mode,
+      return { players: 1, blocked: !$('start').hidden, loading: state.loading, paused: media.paused, muted: media.muted || Number(vol.value) === 0, volume: Number(vol.value), mode: state.mode,
         time: media.currentTime, duration: duration(), track: cur && cur.track, genre: cur && cur.genre,
         viaje: (cur && cur.viaje) || null, /* viaje de Bienestar de la pista que suena (lo trae /api/next) */
         cola: state.plan ? { i: state.plan.i, total: state.plan.items.length } : null }; /* lista en curso (orden 'queue') */

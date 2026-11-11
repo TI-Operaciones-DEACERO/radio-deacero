@@ -164,16 +164,17 @@
     if (ocupado) return;
     if (!L.peticionValida(req)) { els.estadoMsg.textContent = 'Elige cómo te sientes o escríbelo con tus palabras.'; return; }
     els.estadoMsg.textContent = 'Armando tu viaje…';
+    P.cargando('Pensando…', 'Armando tu viaje según cómo te sientes.', { ia: true });
     ocupar(true);
     const r = await A.bienestarIniciar(P.sid(), req);
     ocupar(false);
     els.estadoMsg.textContent = '';
-    if (!r.ok || !r.data || !Array.isArray(r.data.fases)) { P.toastError(L.mensajeError(r.status)); return; }
+    if (!r.ok || !r.data || !Array.isArray(r.data.fases)) { P.finCarga(); P.toastError(L.mensajeError(r.status)); return; }
     plan = r.data; detenido = false; visto = false; firmaFases = ''; firmaPlan = '';
     guardarPlan();
     if (plan.animo && plan.animo.id) { try { store.set(LS_USOS, JSON.stringify(L.sumarUso(usos(), plan.animo.id))); } catch (_) { /* sin almacenamiento */ } pintarRapido(); }
     pintarViaje(true);
-    P.toast('Tu viaje empezó. Armando la primera canción…');
+    P.cargandoMusica('Buscando lo mejor para ti', 'La primera canción de tu viaje.');
     els.viaje.scrollIntoView({ block: 'start' });
     P.send({ cmd: 'random' }); /* con el viaje activo en el servidor, "otra canción" ya viene de la fase 1 */
   }

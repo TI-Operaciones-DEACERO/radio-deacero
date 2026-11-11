@@ -137,20 +137,56 @@
     P.remarcarSonando();
   }
 
-  /* ───────────── Podcasts ───────────── */
+  /* ───────────── Podcasts: temas (carrusel) → episodios con portada; cada uno se escucha o se ve en video ───────────── */
   const revisarPod = carrusel($('podScroll'), $('podPrev'), $('podNext'));
   let podCargados = false;
+  const fmtDur = (s) => (s > 0 ? (s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.round((s % 3600) / 60) + ' min' : Math.round(s / 60) + ' min') : '');
+  function episodio(t) {
+    const img = h('img', { class: 'epi-img', alt: '', loading: 'lazy', decoding: 'async', width: '320', height: '180', src: '/api/thumb/' + encodeURIComponent(t.id) });
+    img.addEventListener('error', () => { img.hidden = true; });
+    const tocar = (video) => {
+      P.cargando('Preparando el episodio', t.title);
+      P.send({ cmd: 'track', kind: 'podcast', track: { id: t.id, title: t.title, channel: t.channel, duration: t.duration } });
+      if (video) P.abrirVideo();
+    };
+    return h('li', { class: 'epi' }, [
+      h('div', { class: 'epi-portada' }, [img]),
+      h('p', { class: 'epi-nombre', text: t.title }),
+      h('p', { class: 'epi-meta', text: [t.channel, fmtDur(t.duration)].filter(Boolean).join(' · ') }),
+      h('div', { class: 'epi-acc' }, [
+        h('button', { type: 'button', class: 'primary corto', 'aria-label': 'Escuchar: ' + t.title, onclick: () => tocar(false) }, [P.fa('fa-play'), ' Escuchar']),
+        h('button', { type: 'button', class: 'ghost corto', 'aria-label': 'Ver video: ' + t.title, onclick: () => tocar(true) }, [P.fa('fa-tv'), ' Ver video'])
+      ])
+    ]);
+  }
+  let temaActual = '';
+  function cargarEpisodios(tema) {
+    temaActual = tema.query;
+    $('episT').textContent = 'Episodios: ' + tema.titulo;
+    for (const b of $('podCards').querySelectorAll('button[data-tema]')) b.setAttribute('aria-pressed', String(b.dataset.tema === tema.query));
+    return cargarEn($('podEpis'), () => A.podcastEpisodios(String(tema.query).slice(0, 100)), (lista) => {
+      const eps = (Array.isArray(lista) ? lista : []).filter((t) => t && typeof t.id === 'string' && t.title);
+      return eps.length ? eps.slice(0, 12).map(episodio) : [h('li', { class: 'hint', text: 'No encontré episodios de este tema. Prueba otro.' })];
+    });
+  }
   function cargarPodcasts() {
     podCargados = true;
     return cargarEn($('podCards'), () => A.iaPodcasts(), (d) => {
       const items = (Array.isArray(d.items) ? d.items : []).filter((i) => i && i.titulo && typeof i.query === 'string');
       setTimeout(revisarPod, 0);
       if (!items.length) return [h('li', { class: 'hint', text: 'No hay podcasts sugeridos por ahora.' })];
-      return items.map((i) => tarjeta({
-        emoji: '🎙️', sup: 'Podcast', titulo: i.titulo, texto: i.razon,
-        aria: 'Escuchar ' + i.titulo + (i.razon ? '. ' + i.razon : ''),
-        alClic: () => { P.toast('Buscando «' + i.titulo + '»…', 2500); P.send({ cmd: 'search', q: String(i.query).slice(0, 100) }); }
-      }));
+      const primero = items.find((i) => i.query === temaActual) || items[0];
+      setTimeout(() => cargarEpisodios(primero), 0); /* recién abierto ya muestra episodios */
+      return items.map((i) => {
+        const li = tarjeta({
+          emoji: '🎙️', sup: 'Tema', titulo: i.titulo, texto: i.razon,
+          aria: 'Ver episodios de ' + i.titulo + (i.razon ? '. ' + i.razon : ''),
+          alClic: () => { cargarEpisodios(i); $('episT').scrollIntoView({ block: 'nearest' }); }
+        });
+        const b = li.querySelector('button');
+        if (b) { b.dataset.tema = i.query; b.setAttribute('aria-pressed', 'false'); }
+        return li;
+      });
     }, $('podAct'));
   }
   $('podAct').addEventListener('click', () => { if ($('podAct').getAttribute('aria-disabled') !== 'true') cargarPodcasts(); });

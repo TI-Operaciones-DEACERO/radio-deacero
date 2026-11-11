@@ -172,3 +172,52 @@ test('queue: "anterior" dentro de la lista vuelve a la pista previa de la lista'
   await esperar(() => player.getState().track.id === ID(1));
   assert.deepEqual(plano(player.getState().cola), { i: 0, total: 3 });
 });
+
+/* — Lo que elige la persona NO se pierde si el motor sigue con la precarga del arranque (red lenta o sin YouTube): antes
+   'track', 'genre', 'search' y 'queue' se descartaban en silencio mientras state.loading estaba encendido. — */
+function servidorRadioColgada() {
+  const base = servidorFalso();
+  let soltar = null;
+  const fetchImpl = (url) => {
+    const u = new URL(String(url), 'http://x');
+    const esRadio = u.pathname.startsWith('/api/next') && !u.searchParams.get('q') && !u.searchParams.get('genre') && !u.searchParams.get('semilla');
+    if (esRadio && !soltar) return new Promise((r) => { soltar = () => r({ ok: true, json: async () => ({ track: { id: ID(500), title: 'Radio del arranque', channel: 'c', duration: 90 }, genre: { id: 'jazz', label: 'G', emoji: '🎵', color: '#fff' } }) }); });
+    return base.fetchImpl(url);
+  };
+  return { fetchImpl, pedidos: base.pedidos, soltar: () => soltar && soltar() };
+}
+const arrancando = async (player) => { await esperar(() => player.getState().loading); assert.equal(player.getState().track, null); };
+
+for (const orden of [
+  { c: { cmd: 'track', kind: 'song', track: song(9).track }, id: ID(9) },
+  { c: { cmd: 'genre', id: 'jazz' }, id: null },
+  { c: { cmd: 'search', q: 'algo 33' }, id: ID(33) },
+  { c: { cmd: 'queue', items: [song(4), song(5)] }, id: ID(4) }
+]) {
+  test("arranque lento: '" + orden.c.cmd + "' suena aunque la precarga del arranque no haya vuelto, y esta no la pisa", async () => {
+    const srv = servidorRadioColgada();
+    const { player } = cargarMotor(srv.fetchImpl);
+    await arrancando(player);
+    player.handleCommand(orden.c);
+    await esperar(() => player.getState().track);
+    const elegida = player.getState().track.id;
+    if (orden.id) assert.equal(elegida, orden.id);
+    await esperar(() => !player.getState().loading);
+    srv.soltar(); /* ahora vuelve la precarga del arranque */
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(player.getState().track.id, elegida, 'la radio del arranque no reemplaza lo que eligió la persona');
+    assert.equal(player.getState().loading, false);
+  });
+}
+
+test("arranque lento: 'next' dos veces seguidas no salta dos canciones (sigue habiendo una sola carga a la vez)", async () => {
+  const { fetchImpl, pedidos } = servidorFalso();
+  const { player } = cargarMotor(fetchImpl);
+  await esperar(() => player.getState().track);
+  await new Promise((r) => setTimeout(r, 20));
+  const antes = pedidos.length;
+  player.handleCommand({ cmd: 'next' });
+  player.handleCommand({ cmd: 'next' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(pedidos.length - antes <= 2, 'una pista nueva + su precarga, no dos saltos');
+});

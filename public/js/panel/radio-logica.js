@@ -115,10 +115,53 @@
     return 'descubrir';
   }
 
+  /* Loader grande del panel: c = { t0, id (canción que sonaba al pedir), vioCarga (el motor ya empezó a cargar), ia (aún se consulta a la IA) }.
+     Se va cuando suena OTRA canción, cuando el motor terminó de cargar sin lograrlo (hubo error: ya lo avisó) o, por si acaso, a los 90 s. */
+  function cargaTermina(c, s, ahora) {
+    if (!c) return true;
+    if (ahora - c.t0 > 90000) return true;
+    const id = s && s.track ? s.track.id : '';
+    if (id && id !== c.id) return true;
+    if (c.ia) return false;
+    return !!(c.vioCarga && s && !s.loading);
+  }
+
+  /* ¿Aparece SOLA la capa «Buscando música…» (el motor busca y ningún botón del panel mostró la suya)? o = { cargando, desde (ms en que
+     empezó a buscar), ahora, pedido (ms del último Siguiente/Anterior de la persona; 0 = ninguno), descartada (la ocultó o pasaron los 90 s
+     en ESTA búsqueda) }. Solo si la persona pidió algo hace poco: la precarga del arranque o el cambio de canción al terminar no tapan la pantalla. */
+  function cargaSola(o) {
+    if (!o || !o.cargando || o.descartada || !(o.desde > 0) || !(o.pedido > 0)) return false;
+    if (o.desde - o.pedido > 10000) return false;
+    return o.ahora - o.desde > 700;
+  }
+
+  /* Región #srAhora: un texto igual al que ya tiene no se vuelve a leer; se alterna un espacio duro al final para que sí se anuncie. */
+  function textoAnuncio(previo, txt) {
+    const t = String(txt == null ? '' : txt);
+    return t && String(previo == null ? '' : previo) === t ? t + ' ' : t;
+  }
+
+  /* ¿El foco está en un campo donde se escribe? (la capa de carga que sale sola no le estorba) */
+  const NO_ESCRIBE = new Set(['button', 'checkbox', 'radio', 'range', 'color', 'file', 'submit', 'reset', 'image', 'hidden']);
+  function escribiendo(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    return tag === 'INPUT' && !NO_ESCRIBE.has(String(el.type || 'text').toLowerCase());
+  }
+
+  /* Alto que ocupan la barra de reproducción y las pestañas desde abajo (topBarra = su borde superior en px). Sin medida: 90. */
+  function altoBarra(alto, topBarra) {
+    if (!Number.isFinite(topBarra) || !Number.isFinite(alto)) return 90;
+    return Math.round(Math.min(alto, Math.max(0, alto - topBarra)));
+  }
+
   const api = {
+    textoAnuncio, escribiendo, altoBarra,
     DESCUBRIR, DESTACADOS, generosDestacados, colorSeguro, generoSonando,
     fmtTiempo, progreso, segundosDesde, iconoVolumen, valorConTecla, textoVolumen,
-    CARACTERES, etiquetaCaracter,
+    CARACTERES, etiquetaCaracter, cargaTermina, cargaSola,
     destino, MENU, vistaDeAtajo, pestanaMovil
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

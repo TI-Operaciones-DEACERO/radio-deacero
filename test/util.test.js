@@ -101,3 +101,14 @@ test('announceSlot: un solo aviso por cada múltiplo de N minutos', () => {
   assert.equal(announceSlot(t(15, 20, 0), 0), null, 'N inválido = nunca');
   assert.equal(announceSlot(t(15, 20, 0), NaN), null);
 });
+
+test('semillaDe: el artista de una canción elegida (para «más como esto»)', () => {
+  const { semillaDe } = require('../public/js/util.js');
+  assert.equal(semillaDe({ title: 'Selena Gomez & The Scene - Love You Like A Love Song', channel: 'SelenaGomezVEVO' }), 'Selena Gomez & The Scene');
+  assert.equal(semillaDe({ title: 'Hasta Que Me Olvides', channel: 'Luis Miguel - Topic' }), 'Luis Miguel');
+  assert.equal(semillaDe({ title: 'Mr. Brightside', channel: 'TheKillersVEVO' }), 'TheKillers');
+  assert.equal(semillaDe({ title: 'Bad Bunny – Tití Me Preguntó (Video Oficial)', channel: 'Bad Bunny' }), 'Bad Bunny');
+  assert.equal(semillaDe({ title: 'algo', channel: '' }), 'algo', 'sin canal: el título');
+  assert.equal(semillaDe(null), '');
+  assert.ok(semillaDe({ title: 'x'.repeat(300) + ' - y', channel: '' }).length <= 100);
+});

@@ -41,7 +41,7 @@ function createRadio({
 
   /* Estado de UN oyente. recent = ids ya servidos (orden de inserción). locked = la racha actual la pidió el usuario:
    * si no hay música de ese género avisa en vez de saltar a otro. chain serializa sus peticiones (el cliente precarga y pide dos a la vez). */
-  const newSession = () => ({ genre: null, left: 0, locked: false, avoid: new Set(), only: null, viaje: null, firmas: new Set(), lastGenres: [], recent: new Set(), chain: Promise.resolve(), seen: now() });
+  const newSession = () => ({ genre: null, left: 0, locked: false, avoid: new Set(), only: null, viaje: null, semilla: null, epoch: 0, firmas: new Set(), lastGenres: [], recent: new Set(), chain: Promise.resolve(), seen: now() });
   const main = newSession();
   const sessions = new Map(); /* id → estado */
 
@@ -79,6 +79,47 @@ function createRadio({
     bad.set(track.id, now() + badTtlMs);
     if (bad.size > 500) bad.delete(bad.keys().next().value);
     return false;
+  }
+
+  const LOTE = 3;
+  function primeraQueSuena(lote, key) {
+    return new Promise((resolve) => {
+      let pend = lote.length, ganador = null;
+      for (const t of lote) {
+        playable(t).catch(() => false).then((ok) => {
+          if (ok && !ganador) { ganador = t; resolve(t); }
+          else if (ok) { const cur = pools.get(key); if (cur && !cur.some((x) => x.id === t.id)) cur.unshift(t); }
+          if (--pend === 0 && !ganador) resolve(null);
+        });
+      }
+    });
+  }
+
+  /* Semilla: «más como esto» (una búsqueda o el artista de una canción elegida). Se comporta como un género más con su propio pool. */
+  const semillaKeys = [];
+  function generoSemilla(q) {
+    const id = 'semilla:' + q.toLowerCase();
+    if (!semillaKeys.includes(id)) {
+      semillaKeys.push(id);
+      while (semillaKeys.length > 40) pools.delete(semillaKeys.shift()); /* no crecer sin tope */
+    }
+    return { id, label: q, emoji: '🔎', color: '#F59B23', queries: [q, q + ' canciones'] };
+  }
+  const pubSemilla = (g) => ({ id: 'search', label: g.label, emoji: g.emoji, color: g.color }); /* hacia fuera es «búsqueda», como siempre */
+  function empezarSemilla(s, q) {
+    s.viaje = null; s.locked = false; s.genre = null; s.left = 0; /* al terminar la racha, la rotación elige género nuevo */
+    s.semilla = { g: generoSemilla(q), left: between(perGenre), nueva: true };
+  }
+  async function pickSemilla(s) {
+    const sm = s.semilla;
+    const track = await takeTrack(s, sm.g);
+    if (!track) { s.semilla = null; return null; } /* sin más resultados: sigue la radio */
+    remember(s, track.id, track.title);
+    sm.left = track.duration > SONG_MAX_SEC ? 0 : sm.left - 1;
+    const r = { track, genre: pubSemilla(sm.g), genreChanged: sm.nueva, genreLeft: Math.max(sm.left, 0) };
+    sm.nueva = false;
+    if (sm.left <= 0) s.semilla = null;
+    return r;
   }
 
   function remember(s, id, title) {
@@ -119,11 +160,17 @@ function createRadio({
     const songs = pool.filter((t) => !(t.duration > SONG_MAX_SEC));
     if (songs.length) pool = songs;
     let track = null;
-    if (s !== main) {
-      /* Oyente del panel: DIRECTO, sin sondear (el sondeo es resolver con yt-dlp + pedir 1 byte: segundos de espera por pista). Si la
-       * pista falla, su reproductor reintenta una vez y salta; las que ya se sabe que fallan (isBad) nunca se le dan. Primero una ya resuelta. */
-      const i = pool.findIndex((t) => listo(t.id));
-      [track] = pool.splice(i >= 0 ? i : Math.floor(rng() * pool.length), 1);
+    /* Oyente del panel: si el calentador ya dejó una canción RESUELTA, se le da al instante (sin sondear). Si no hay ninguna lista, se
+     * comprueba como en las pantallas: el panel nunca debe recibir una pista que no suena (eso era el «Reintentando…» y el salto). */
+    const lista = s !== main ? pool.findIndex((t) => listo(t.id)) : -1;
+    if (lista >= 0) [track] = pool.splice(lista, 1);
+    else if (s !== main) {
+      /* Oyente: se comprueban LOTE canciones A LA VEZ y gana la primera que suena (una tras otra eran hasta 6 esperas seguidas). Las demás
+       * que también suenan vuelven al pool ya resueltas: la siguiente sale al instante. */
+      for (let tries = 0; !track && tries < probeTriesRacha && pool.length; tries += LOTE) {
+        const lote = pool.splice(0, LOTE);
+        track = await primeraQueSuena(lote, key);
+      }
     } else {
       for (let tries = 0; tries < probeTriesRacha && pool.length; tries++) {
         const [t] = pool.splice(Math.floor(rng() * pool.length), 1);
@@ -155,17 +202,27 @@ function createRadio({
     try { found = await search(q, 8); } catch { /* sin resultados */ }
     const fresh = found.filter((t) => !s.recent.has(t.id) && !isBad(t.id) && filtro(t));
     const ordered = [...fresh.filter((t) => !(t.duration > SONG_MAX_SEC)), ...fresh.filter((t) => t.duration > SONG_MAX_SEC)];
-    let track = null;
-    if (s !== main) track = ordered[0] || null; /* oyente: directo, sin sondear */
-    else for (const t of ordered.slice(0, probeTries)) { if (await playable(t)) { track = t; break; } }
+    let track = s !== main ? ordered.find((t) => listo(t.id)) || null : null; /* oyente: una ya resuelta suena al instante */
+    if (!track) for (const t of ordered.slice(0, probeTries)) { if (await playable(t)) { track = t; break; } }
     if (!track) throw err('NO_SOURCE', ordered.length ? `Ningún resultado de "${q}" se pudo reproducir` : `Sin resultados para "${q}"`);
     remember(s, track.id);
+    if (s !== main && !s.viaje) { /* oyente (fuera de un viaje de Bienestar, donde la búsqueda es pauta única): lo que sigue sale de la misma búsqueda (racha), no de lo que sonaba antes */
+      empezarSemilla(s, q);
+      return { track, genre: pubSemilla(s.semilla.g), genreChanged: true, genreLeft: s.semilla.left };
+    }
     return { track, genre: { id: 'search', label: `Búsqueda: ${q}`, emoji: '🔎', color: '#F59B23' }, genreChanged: true, genreLeft: null };
   }
 
-  async function pickNext(s, { genre: wanted, change, query }) {
+  async function pickNext(s, { genre: wanted, change, query, semilla }) {
     if (query) return pickQuery(s, query);
     let switched = false;
+    if (wanted || change) s.semilla = null; /* lo que se pide ahora termina la racha de la semilla */
+    if (semilla && s !== main) {
+      empezarSemilla(s, semilla);
+      const r = await pickSemilla(s);
+      if (r) return r;
+    }
+    if (s.semilla && !wanted && !change) { const r = await pickSemilla(s); if (r) return r; }
     if (wanted) {
       const g = byId.get(wanted);
       if (!g) throw err('UNKNOWN_GENRE', `Género desconocido: ${wanted}`);
@@ -258,7 +315,15 @@ function createRadio({
    * opts.session = id del oyente independiente (sin él, la sesión principal). */
   function next(opts) {
     const s = sessionFor(opts && opts.session);
-    const run = s.chain.then(() => nextInner(s, opts));
+    /* Lo que la persona pide (género, búsqueda, semilla, cambio) gana: las precargas «siguiente» que aún esperaban en fila ya no sirven y se
+     * descartan sin buscar ni comprobar nada (si no, la petición de la persona esperaba detrás de ellas). */
+    const pedida = !!(opts && (opts.genre || opts.change || opts.query || opts.semilla));
+    if (pedida) s.epoch++;
+    const ep = s.epoch;
+    const run = s.chain.then(() => {
+      if (!pedida && ep !== s.epoch) throw err('STALE', 'Superada por una petición más nueva');
+      return nextInner(s, opts);
+    });
     s.chain = run.catch(() => {});
     return run;
   }

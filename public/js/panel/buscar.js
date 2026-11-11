@@ -23,7 +23,8 @@
   }
 
   async function tocar(t) {
-    if (await P.send({ cmd: 'track', kind: 'search', track: t })) P.toast('Reproduciendo: ' + t.title + '. Después sigue la radio.', 3500);
+    P.cargando('Preparando «' + t.title + '»', 'Después siguen canciones parecidas.');
+    if (!(await P.send({ cmd: 'track', kind: 'search', track: t }))) P.finCarga();
   }
 
   async function buscar() {

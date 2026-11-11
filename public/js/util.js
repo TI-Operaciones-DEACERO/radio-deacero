@@ -109,7 +109,16 @@
     return new Date(ms).getMinutes() % everyMin === 0 ? Math.floor(ms / 60000) : null;
   }
 
-  var api = { clockParts: clockParts, spokenTime: spokenTime, announceSlot: announceSlot, fmtTime: fmtTime, activeLine: activeLine, createHistory: createHistory, emojiSrc: emojiSrc, setEmoji: setEmoji, cleanQueueItems: cleanQueueItems };
+  /* «Más como esto»: el artista de una canción elegida. «Artista - Título» → Artista; si no, el canal sin « - Topic» ni «VEVO». */
+  function semillaDe(track) {
+    if (!track) return '';
+    var title = String(track.title || '').trim();
+    var m = /^(.{2,60}?)\s+[-–—]\s+\S/.exec(title);
+    var canal = String(track.channel || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').replace(/\s*(Official|Oficial)$/i, '').trim();
+    return (m ? m[1].trim() : canal || title).slice(0, 100);
+  }
+
+  var api = { semillaDe: semillaDe, clockParts: clockParts, spokenTime: spokenTime, announceSlot: announceSlot, fmtTime: fmtTime, activeLine: activeLine, createHistory: createHistory, emojiSrc: emojiSrc, setEmoji: setEmoji, cleanQueueItems: cleanQueueItems };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Util = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -69,6 +69,7 @@
     /* IA (abierta, sin cuenta) */
     iaAhora: () => call('GET', '/api/ia/ahora'),
     iaPodcasts: () => call('GET', '/api/ia/podcasts'),
+    podcastEpisodios: (q) => call('GET', '/api/podcast/search?q=' + e(q)),
     iaParaTi: (sid) => call('GET', '/api/ia/para-ti?sid=' + e(sid)),
     iaDescubrir: (sid, prefer, avoid) => call('GET', '/api/ia/descubrir?sid=' + e(sid) + (prefer && prefer.length ? '&prefer=' + e(prefer.join(',')) : '') + (avoid && avoid.length ? '&avoid=' + e(avoid.join(',')) : '')),
     iaPlaylist: (q) => call('GET', '/api/ia/playlist?q=' + e(q)),
@@ -108,4 +109,23 @@
     estadoUsuario: (id, estado) => adm('PATCH', '/api/admin/usuarios/' + e(id), { estado }),
     diagnostico: () => adm('GET', '/api/admin/diagnostico')
   };
+
+  /* Sin nómina, historial y playlists van a ESTE navegador (misma forma de respuesta). nucleo.js avisa con usarCuenta(true/false). */
+  const B = window.PlayBibliotecaLocal;
+  if (B) {
+    const ls = {
+      get: (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } },
+      set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* sin almacenamiento */ } },
+      del: (k) => { try { localStorage.removeItem(k); } catch (_) { /* sin almacenamiento */ } }
+    };
+    const local = B.createBibliotecaLocal({ store: ls });
+    const A = window.PlayApi;
+    let cuenta = false;
+    for (const k of ['historial', 'registrarHistorial', 'borrarHistorial', 'playlists', 'playlist', 'crearPlaylist', 'renombrarPlaylist', 'borrarPlaylist', 'agregarAPlaylist', 'quitarDePlaylist']) {
+      const remoto = A[k];
+      A[k] = (...a) => (cuenta ? remoto(...a) : local[k](...a));
+    }
+    A.usarCuenta = (si) => { cuenta = !!si; };
+    A.enCuenta = () => cuenta;
+  }
 })();

@@ -22,11 +22,10 @@
   const vacio = (t) => h('p', { class: 'hint', text: t });
 
   function tocarGenero(g) {
-    P.toast('Cambiando a ' + g.label + '…', 2500);
-    P.send({ cmd: 'genre', id: g.id });
+    P.radioGenero(g.id, g.label);
   }
   function tocarConsulta(nombre, query) {
-    P.toast('Buscando «' + nombre + '»…', 2500);
+    P.cargando('Buscando lo mejor para recomendarte', nombre);
     P.send({ cmd: 'search', q: String(query).slice(0, 100) });
   }
 
@@ -113,7 +112,9 @@
       const q = campo.value.trim();
       if (!q) { P.toast('Escribe qué quieres escuchar.'); campo.focus(); return; }
       crear.disabled = true;
+      P.cargando('Pensando…', 'La IA está armando tu playlist.', { ia: true });
       const bien = await cargarEn(salida, () => A.iaPlaylist(q), (d) => pintarPlaylist(d));
+      P.finCarga();
       crear.disabled = false;
       if (bien && ultimaN) P.toast('Lista lista: ' + ultimaN + (ultimaN === 1 ? ' canción.' : ' canciones.'));
     });
@@ -138,7 +139,7 @@
       d.descripcion ? h('p', { class: 'hint', text: d.descripcion }) : null,
       fuenteEl(d.fuente),
       h('div', { class: 'row izq' }, [
-        h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.toast('Reproduciendo la lista…', 2500); P.send(L.queueFromQueries(consultas)); } }),
+        h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando tu lista', 'Buscando la primera canción…'); P.send(L.queueFromQueries(consultas)); } }),
         guardar
       ]),
       progreso,
@@ -151,7 +152,6 @@
 
   /* Cada consulta se resuelve a una canción concreta (una búsqueda del servidor) y se agrega a una playlist nueva de la cuenta. */
   async function guardarPlaylist(d, consultas, boton, progreso) {
-    if (!P.usuario()) { P.toast('Para guardar la playlist entra con tu nómina.'); P.abrirCuenta(); return; }
     boton.disabled = true;
     progreso.textContent = 'Creando la playlist…';
     const c = await A.crearPlaylist(d.nombre || 'Mezcla para ti');

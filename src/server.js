@@ -265,6 +265,8 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
       if (q.has('sid') && !SESSION_ID.test(q.get('sid'))) return json(res, 400, { error: 'BAD_SESSION' });
       try {
         const opts = { genre: q.get('genre') || undefined, change: q.get('change') === '1', query: (q.get('q') || '').trim().slice(0, 100) || undefined };
+        const semilla = (q.get('semilla') || '').trim().slice(0, 100);
+        if (semilla) opts.semilla = semilla; /* «más como esto»: artista de la canción elegida */
         if (q.has('sid')) opts.session = q.get('sid'); /* sin sid: la sesión principal (las pantallas) */
         else if (programa) { const sel = programa.seleccion(); if (sel.generos.length) opts.onlyGenres = sel.generos; } /* horario: SOLO las pantallas */
         const evitar = account && library ? library.avoidGenres(account.id) : [];
@@ -275,6 +277,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
         return json(res, 200, r);
       } catch (e) {
         if (e.code === 'UNKNOWN_GENRE') return json(res, 400, { error: e.code });
+        if (e.code === 'STALE') return json(res, 409, { error: e.code }); /* precarga superada por lo que la persona pidió: normal */
         if (e.code === 'NO_SOURCE') { anotar('radio', 'aviso', e.message); return json(res, 503, { error: e.code }); }
         anotar('radio', 'error', e && e.message);
         return json(res, 500, { error: 'INTERNAL' });
