@@ -30,6 +30,10 @@ const MAX_URL_TTL = 5 * 3600 * 1000;
 const URL_MARGIN = 60 * 1000;
 const MAX_CONCURRENT = 2;
 const MAX_WAITING = 20; /* peticiones en espera: más allá se rechaza (la cola no crece sin límite) */
+/* Baja prioridad (carátulas y miniclips de los banners): a lo sumo UN lugar, nunca antes que la música en fila, y fila corta. Sin esto, abrir el
+ * panel llenaba la cola de yt-dlp y el kiosco esperaba minutos su siguiente canción. */
+const MAX_BAJA = 1;
+const MAX_WAITING_BAJA = 10;
 
 /* yt-dlp (y lo que haya en YTDLP_EXTRA) no necesita ni debe heredar las claves del servidor. */
 const SECRETO = /key|token|secret|passw|credential/i;
@@ -58,29 +62,37 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
   let versionStr = null;
   const cache = new Map();     /* `${id}|${mode}` → { url, duration, expires } */
   const inflight = new Map();  /* misma clave → Promise */
-  let active = 0;
-  const waiting = [];
+  let active = 0, activeBaja = 0;
+  const waiting = [], waitingBaja = [];
 
-  function slot() {
+  function slot(baja) {
+    if (baja) {
+      if (active < concurrency && activeBaja < MAX_BAJA && !waiting.length) { active++; activeBaja++; return Promise.resolve(); }
+      return new Promise((r) => waitingBaja.push(r));
+    }
     if (active < concurrency) { active++; return Promise.resolve(); }
     return new Promise((r) => waiting.push(r));
   }
-  function release() {
+  /* El lugar que se libera pasa primero a la música en fila; si no hay, a un adorno (si no hay otro adorno en curso). */
+  function release(baja) {
+    if (baja) activeBaja--;
     const next = waiting.shift();
-    if (next) next(); else active--;
+    if (next) return next();
+    if (activeBaja < MAX_BAJA && waitingBaja.length) { activeBaja++; return waitingBaja.shift()(); }
+    active--;
   }
 
-  function run(args, timeoutMs = 25000) {
+  function run(args, timeoutMs = 25000, { baja = false } = {}) {
     if (!current) return Promise.reject(new Error('yt-dlp no disponible'));
-    if (active >= concurrency && waiting.length >= maxWaiting) return Promise.reject(new Error('yt-dlp: cola llena'));
-    return slot().then(() => new Promise((resolve, reject) => {
+    if (baja ? waitingBaja.length >= MAX_WAITING_BAJA : active >= concurrency && waiting.length >= maxWaiting) return Promise.reject(new Error('yt-dlp: cola llena'));
+    return slot(baja).then(() => new Promise((resolve, reject) => {
       let out = '';
       let err = '';
       let settled = false;
-      const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); release(); fn(v); } };
+      const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); release(baja); fn(v); } };
       let p;
       try { p = spawn(current.cmd, [...current.extra, ...extraArgs, ...args], { env: cleanEnv() }); }
-      catch (e) { release(); return reject(e); }
+      catch (e) { release(baja); return reject(e); }
       const timer = setTimeout(() => { try { p.kill(); } catch { /* ya terminó */ } finish(reject, new Error('yt-dlp: tiempo agotado')); }, timeoutMs);
       p.stdout.on('data', (d) => { out += d; });
       p.stderr.on('data', (d) => { err += d; });
@@ -107,8 +119,9 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
   }
 
   /* minSec/maxSec acotan la duración (p. ej. episodios de podcast: de 5 min a 4 h). */
-  async function search(query, max = 10, { minSec = MIN_SEC, maxSec = MAX_SEC } = {}) {
-    const out = await run([`ytsearch${max}:${query}`, '--flat-playlist', '--print-json', '--no-warnings', '--socket-timeout', '6']);
+  /* baja: true = adorno (banners); ver MAX_BAJA. */
+  async function search(query, max = 10, { minSec = MIN_SEC, maxSec = MAX_SEC, baja = false } = {}) {
+    const out = await run([`ytsearch${max}:${query}`, '--flat-playlist', '--print-json', '--no-warnings', '--socket-timeout', '6'], undefined, { baja });
     const items = [];
     for (const l of out.split('\n')) {
       if (!l.trim().startsWith('{')) continue;
@@ -125,7 +138,7 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
     return items;
   }
 
-  function resolve(id, mode = 'audio') {
+  function resolve(id, mode = 'audio', { baja = false } = {}) {
     if (typeof id !== 'string' || !VIDEO_ID.test(id)) return Promise.reject(new Error('ID inválido'));
     if (!FORMATS[mode]) return Promise.reject(new Error('Modo inválido (audio|video)'));
     const key = `${id}|${mode}`;
@@ -134,7 +147,7 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
     if (inflight.has(key)) return inflight.get(key);
 
     const p = run(['--no-playlist', '-f', FORMATS[mode], '--print', 'duration', '--print', 'urls',
-      '--no-warnings', '--socket-timeout', '8', `https://www.youtube.com/watch?v=${id}`])
+      '--no-warnings', '--socket-timeout', '8', `https://www.youtube.com/watch?v=${id}`], undefined, { baja })
       .then((out) => {
         const lines = out.split('\n').map((s) => s.trim()).filter(Boolean);
         const url = lines.find((s) => s.startsWith('http'));

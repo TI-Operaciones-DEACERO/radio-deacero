@@ -61,7 +61,7 @@ const geminiJson = gemini.json;
 gemini.json = (...a) => geminiJson(...a).catch((e) => { if (e && e.code !== 'GEMINI_OFF') diag.add('gemini', 'aviso', (e && (e.code || e.message)) + ' → respaldo local'); throw e; });
 const popularidad = createPopularidad({ dir: DATA_DIR }); /* lo más escuchado de la planta: solo conteos por artista y género */
 const ia = createIa({ genres, artistas: require('./data/seed/artistas.json'), podcasts: require('./data/seed/podcasts.json'), popularidad, gemini });
-const muestras = createMuestras({ radio, search: (q, n) => ytdlp.search(q, n), filtro: (t) => ajustes.permite(t), preparar: (id) => ytdlp.resolve(id, 'video') }); /* carátula y miniclip de los banners */
+const muestras = createMuestras({ radio, search: (q, n) => ytdlp.search(q, n, { baja: true }), filtro: (t) => ajustes.permite(t), preparar: (id) => ytdlp.resolve(id, 'video', { baja: true }) }); /* carátula y miniclip de los banners */
 process.on('exit', () => { try { popularidad.guardar(); } catch (_) { /* sin disco */ } });
 
 /* Calentador: en segundo plano tiene canciones listas (buscadas y resueltas) de los géneros destacados, de a uno cada CALENTAR_CADA_MS

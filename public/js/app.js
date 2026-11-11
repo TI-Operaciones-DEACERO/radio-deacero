@@ -78,10 +78,13 @@
   /* Reintenta con espera creciente: sin conexión no se queda mudo ni rompe nada. Con «yo»: si mientras tanto la persona eligió
      otra cosa (otra carga), deja de intentar y devuelve null. */
   async function fetchNextPatient(opts, yo) {
-    for (let i = 0; ; i++) {
+    for (let i = 0, superadas = 0; ; i++) {
       if (yo !== undefined && yo !== state.carga) return null;
       try { return await fetchNext(opts); }
       catch (e) {
+        /* 409 = el servidor la descartó por una petición más nueva de esta sesión. Si aquí nadie pidió otra cosa (sigue siendo la carga
+           vigente), se vuelve a pedir: si no, el kiosco se quedaba sin canción y en pausa para siempre. */
+        if (e.status === 409 && yo !== undefined && yo === state.carga && ++superadas <= 5) continue;
         if (e.status === 400 || e.status === 409) throw e;
         setStatus('Sin conexión con YouTube — reintentando…');
         await sleep(Math.min(3000 * (i + 1), 30000));

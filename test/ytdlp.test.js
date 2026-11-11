@@ -193,3 +193,50 @@ test('search: minSec/maxSec se pueden ajustar (episodios de podcast) y usa ytsea
   assert.equal(spawn.calls[0].args[0], 'ytsearch5:radio ambulante');
   assert.deepEqual(items.map((i) => i.id), [ID('b')]);
 });
+
+/* spawn a mano: cada proceso termina cuando la prueba lo suelta (así se ve el orden en que yt-dlp atiende la fila). */
+function spawnManual() {
+  const vivos = [];
+  const spawn = (cmd, args) => {
+    const p = new EventEmitter();
+    p.stdout = new PassThrough(); p.stderr = new PassThrough(); p.kill = () => {};
+    p.args = args;
+    p.soltar = () => { p.stdout.end('100\nhttps://rr1.googlevideo.com/v?expire=9999999999\n'); p.stderr.end(''); setImmediate(() => p.emit('close', 0)); };
+    vivos.push(p);
+    return p;
+  };
+  spawn.vivos = vivos;
+  return spawn;
+}
+const tic = () => new Promise((r) => setImmediate(r));
+const idDe = (p) => p.args[p.args.length - 1].slice(-11);
+
+test('prioridad: lo de baja prioridad (carátulas y miniclips) usa a lo sumo un lugar y no adelanta a la música en fila', async () => {
+  const spawn = spawnManual();
+  const yt = createYtdlp({ spawn, cmd: CMD, concurrency: 2, now: () => NOW });
+  const bajas = [ID('a'), ID('b'), ID('c')].map((id) => yt.resolve(id, 'video', { baja: true }));
+  await tic();
+  assert.equal(spawn.vivos.length, 1, 'solo un trabajo de baja prioridad a la vez: el otro lugar queda para la música');
+  const musica = [ID('m'), ID('n')].map((id) => yt.resolve(id, 'audio'));
+  await tic();
+  assert.equal(spawn.vivos.length, 2, 'la música toma el lugar libre al instante');
+  assert.equal(idDe(spawn.vivos[1]), ID('m'));
+  spawn.vivos[0].soltado = true; spawn.vivos[0].soltar(); await tic(); await tic();
+  assert.equal(idDe(spawn.vivos[2]), ID('n'), 'al liberarse un lugar, la música en fila va antes que la baja prioridad');
+  for (let i = 0; i < 8; i++) { for (const p of spawn.vivos) if (!p.soltado) { p.soltado = true; p.soltar(); } await tic(); await tic(); }
+  await Promise.all([...bajas, ...musica]);
+  assert.equal(spawn.vivos.length, 5, 'al final se atiende todo');
+});
+
+test('prioridad: si la fila de baja prioridad está llena se rechaza enseguida (los adornos no se acumulan)', async () => {
+  const spawn = spawnManual();
+  const yt = createYtdlp({ spawn, cmd: CMD, concurrency: 2, now: () => NOW });
+  const ps = [];
+  for (let i = 0; i < 30; i++) ps.push(yt.resolve(ID(String.fromCharCode(65 + (i % 26))) .slice(0, 10) + String(i % 10), 'video', { baja: true }).then(() => 'ok', () => 'rechazada'));
+  await tic();
+  const r = await Promise.race([Promise.all(ps.slice(20)), new Promise((res) => setTimeout(() => res('colgada'), 200))]);
+  assert.notEqual(r, 'colgada');
+  assert.ok(r.every((x) => x === 'rechazada'), 'las que no caben en la fila se rechazan');
+  for (let i = 0; i < 15; i++) { for (const p of spawn.vivos) if (!p.soltado) { p.soltado = true; p.soltar(); } await tic(); await tic(); }
+  await Promise.all(ps);
+});

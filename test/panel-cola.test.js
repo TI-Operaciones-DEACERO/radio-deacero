@@ -221,3 +221,17 @@ test("arranque lento: 'next' dos veces seguidas no salta dos canciones (sigue ha
   await new Promise((r) => setTimeout(r, 20));
   assert.ok(pedidos.length - antes <= 2, 'una pista nueva + su precarga, no dos saltos');
 });
+
+test("409 «superada» en la primera canción: el motor vuelve a pedir y no se queda sin música (el kiosco quedaba en pausa para siempre)", async () => {
+  const base = servidorFalso();
+  let rechazos = 0;
+  const fetchImpl = (url) => {
+    const u = new URL(String(url), 'http://x');
+    if (u.pathname.startsWith('/api/next') && !u.searchParams.get('q') && rechazos < 2) { rechazos++; return Promise.resolve({ ok: false, status: 409, json: async () => ({ error: 'STALE' }) }); }
+    return base.fetchImpl(url);
+  };
+  const { player } = cargarMotor(fetchImpl);
+  await esperar(() => player.getState().track);
+  assert.equal(rechazos, 2);
+  assert.ok(player.getState().track.id);
+});
