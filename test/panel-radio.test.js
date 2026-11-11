@@ -194,3 +194,16 @@ test('intercalar: mezcla artistas y géneros (de a N y uno de la otra lista) sin
   R.intercalar(a, ['g'], 1);
   assert.deepEqual(a, ['a1', 'a2'], 'no modifica lo que recibe');
 });
+
+test('todosLosGeneros: lista completa por nombre; el filtro ignora acentos y mayúsculas y busca en nombre, id y descripción', () => {
+  const todos = R.todosLosGeneros(genres);
+  assert.equal(todos.length, genres.length, 'no se pierde ninguno');
+  const nombres = todos.map((g) => g.label);
+  assert.deepEqual(nombres, nombres.slice().sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })), 'en orden alfabético');
+  const lista = [{ id: 'musica-clasica', label: 'Clásica', desc: 'Orquesta' }, { id: 'jazz', label: 'Jazz', desc: 'Swing y bebop' }, { id: 'x' }, null, { label: 'sin id' }];
+  assert.deepEqual(R.todosLosGeneros(lista).map((g) => g.id), ['musica-clasica', 'jazz'], 'descarta lo que no tiene id o nombre');
+  assert.deepEqual(R.todosLosGeneros(lista, 'CLASICA').map((g) => g.id), ['musica-clasica']);
+  assert.deepEqual(R.todosLosGeneros(lista, '  bebop ').map((g) => g.id), ['jazz']);
+  assert.deepEqual(R.todosLosGeneros(lista, 'zzz'), []);
+  assert.deepEqual(R.todosLosGeneros(null), []);
+});

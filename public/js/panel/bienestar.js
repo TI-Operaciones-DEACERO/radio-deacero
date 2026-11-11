@@ -24,7 +24,7 @@
     el.append(
       (els.titulo = h('h2', { class: 'vt', text: 'Bienestar', tabindex: '-1' })), /* va dentro de Inicio (Radio), que ya tiene su h1 */
       (els.srFase = h('p', { class: 'sr-only', role: 'status' })), /* anuncia el cambio de fase; vive aquí para no recrearse */
-      h('p', { class: 'hint', text: 'Cuéntanos cómo te sientes y armamos un viaje musical en 5 fases: empieza donde estás y te lleva poco a poco adonde quieres llegar.' }),
+      h('p', { class: 'hint', text: 'Cuéntanos cómo te sientes y armamos un viaje musical en 5 fases: empieza donde estás y te lleva poco a poco adonde quieres llegar. Cada fase dura unas canciones y avanza sola: solo escucha.' }),
       els.cuerpo
     );
     P.on('state', alEstado);
@@ -221,14 +221,15 @@
     P.emo(e, animo.emoji);
     const cab = h('div', { class: 'viaje-cab' }, [e, h('h2', { id: 'bzViajeT', text: 'Tu viaje' + (animo.label ? ': ' + animo.label : '') + (plan.destino ? ' → ' + plan.destino.label : '') })]);
     if (!els.detener) els.detener = h('button', { type: 'button', class: 'ghost', text: 'Detener viaje', onclick: detener });
-    const progreso = h('p', { class: 'progreso' });
+    const progresoT = h('strong'), progresoA = h('span', { class: 'progreso-a' });
+    const progreso = h('p', { class: 'progreso' }, [progresoT, progresoA]);
     const cierre = h('div', { class: 'cierre', hidden: true }, [h('h3', { text: 'Llegaste a tu destino' }), h('p', { text: plan.cierre || '' }), h('p', { class: 'hint', text: 'La música continúa en esta energía mientras quieras.' })]);
     const items = plan.fases.map((f, i) => faseItem(f, i));
     const hijos = [cab, h('p', { text: plan.analisis || '' }), progreso];
     if (Array.isArray(plan.avisos) && plan.avisos.length) hijos.push(h('ul', { class: 'avisos' }, plan.avisos.map((a) => h('li', { text: String(a) }))));
     hijos.push(h('ol', { class: 'fases' }, items.map((x) => x.li)), cierre, h('div', { class: 'row izq' }, [els.detener]));
     els.viaje.replaceChildren(...hijos);
-    vv = { progreso, items, cierre };
+    vv = { progresoT, progresoA, items, cierre };
   }
 
   function pintarViaje() {
@@ -239,13 +240,14 @@
     const s = P.estado();
     const ev = L.estadoViaje(plan, s && s.viaje);
     const car = ev.activo && !ev.terminado ? P.R.etiquetaCaracter(plan.fases[ev.faseIdx] && plan.fases[ev.faseIdx].caracter) : '';
-    vv.progreso.textContent = ev.activo ? L.resumenFase(ev) + (car ? ' · Música: ' + car : '') : 'Preparando la primera canción…';
+    vv.progresoT.textContent = ev.activo ? L.resumenFase(ev) + (car ? ' · Música: ' + car : '') : 'Preparando la primera canción…';
+    vv.progresoA.textContent = L.avanceFase(ev); /* cuánto falta para la siguiente fase: avanza sola por canciones */
     vv.items.forEach((x, i) => {
       const actual = ev.activo && !ev.terminado && i === ev.faseIdx;
       const hecha = ev.activo && (ev.terminado || i < ev.faseIdx);
       x.li.className = 'fase' + (actual ? ' actual' : '') + (hecha ? ' hecha' : '');
       if (actual) x.li.setAttribute('aria-current', 'step'); else x.li.removeAttribute('aria-current');
-      x.estado.textContent = actual ? 'En curso' : hecha ? 'Lista' : 'Pendiente';
+      x.estado.textContent = L.estadoFase(ev, i, plan.temasPorFase);
     });
     vv.cierre.hidden = !ev.terminado;
     /* Se anuncia solo el cambio de FASE (o el cierre), no cada tema */
@@ -263,7 +265,7 @@
   }
 
   function faseItem(f, i) {
-    const estado = h('span', { class: 'fase-estado', text: 'Pendiente' });
+    const estado = h('span', { class: 'fase-estado', text: L.estadoFase(null, i, plan.temasPorFase) });
     const li = h('li', { class: 'fase' });
     li.append(
       h('div', { class: 'fase-cab' }, [
@@ -278,7 +280,9 @@
       ])
     );
     if (Array.isArray(f.generos) && f.generos.length) {
-      li.append(h('ul', { class: 'gens', 'aria-label': 'Géneros de la fase ' + (i + 1) }, f.generos.map((g) => {
+      const gid = 'bzGens' + i; /* título visible: antes eran chips sueltos sin explicar */
+      li.append(h('p', { class: 'gens-t', id: gid, text: 'Géneros que sonarán' }));
+      li.append(h('ul', { class: 'gens', 'aria-labelledby': gid }, f.generos.map((g) => {
         const em = h('span', { class: 'chip-e' });
         P.emo(em, g.emoji);
         return h('li', {}, [em, h('span', { text: g.label })]);
@@ -323,7 +327,7 @@
     fav = req;
     store.set(LS_FAV, JSON.stringify(req));
     pintarFav();
-    if (!P.usuario()) { P.toast('Guardado como favorito en este navegador. Si entras con tu nómina, también se guarda en tu cuenta.'); return; }
+    if (!P.usuario()) { P.toast('Guardado como tu viaje favorito. Inicia con tu nómina y continúa donde sea.'); return; }
     const r = await A.guardarPrefs({ bienestar: { favorito: req } });
     P.toast(r.ok ? 'Guardado como tu viaje favorito.' : 'Se guardó en este navegador, pero no se pudo guardar en tu cuenta.');
   }

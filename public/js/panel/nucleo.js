@@ -599,7 +599,10 @@
     if (cargadas[nombre]) { if (cargadas[nombre].mostrar) cargadas[nombre].mostrar(); return; }
     if (cargando[nombre]) return;
     cargando[nombre] = true;
-    el.replaceChildren(h('p', { class: 'cargando', text: 'Cargando…' }));
+    el.replaceChildren(h('div', { class: 'cargando cargando-eq', role: 'status' }, [ /* loader, no el texto suelto */
+      h('span', { class: 'carga-eq mini', 'aria-hidden': 'true' }, [h('i'), h('i'), h('i'), h('i'), h('i')]),
+      h('span', { class: 'sr-only', text: 'Cargando…' })
+    ]));
     const falla = () => {
       cargando[nombre] = false;
       el.replaceChildren(h('div', { class: 'vacio' }, [

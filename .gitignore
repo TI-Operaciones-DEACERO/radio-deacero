@@ -28,3 +28,5 @@ vendor/
 # datos del equipo de desarrollo (destinos, usuarios, accesos): solo en este PC, nunca en el repo
 CLAUDE.local.md
 .local/
+# proyecto viejo (solo referencia local; nunca subirlo)
+/old/

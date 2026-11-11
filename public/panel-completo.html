@@ -65,6 +65,7 @@
   </div>
 
   <div class="sidebar-bottom">
+    <a class="nav-item" href="/panel/simple" title="Vista simple"><i class="fas fa-display nav-ico" aria-hidden="true"></i><span class="nav-txt">Vista simple</span></a>
   </div>
 </nav>
 
@@ -157,6 +158,14 @@
         <section class="aireco-section" aria-labelledby="genT">
           <h2 class="ai-genre-intro" id="genT">O elige un género para iniciar Radio continua</h2>
           <ul class="ai-genre-grid" id="genGrid" aria-labelledby="genT"></ul>
+          <!-- Todos los géneros: lista de texto (sin carátulas: serían cientos de búsquedas), filtrable -->
+          <button type="button" class="ghost gen-todos-btn" id="genTodosBtn" aria-expanded="false" aria-controls="genTodos" hidden>Ver todos los géneros</button>
+          <div class="gen-todos" id="genTodos" hidden>
+            <label class="sr-only" for="genTodosQ">Filtrar géneros</label>
+            <input type="search" id="genTodosQ" placeholder="Filtrar géneros (jazz, salsa, rock…)" autocomplete="off" aria-describedby="genTodosN">
+            <p class="gen-todos-n" id="genTodosN" role="status"></p>
+            <ul class="chips gen-todos-lista" id="genTodosLista" aria-label="Todos los géneros"></ul>
+          </div>
         </section>
       </div>
 

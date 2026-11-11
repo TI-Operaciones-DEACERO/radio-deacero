@@ -65,12 +65,12 @@ Para que la Pi arranque en la vista kiosco: `~/DEACEROPLAY-lite/deploy/install-a
 ## Panel completo (`/panel`)
 
 Se ve y se usa como el **DEACERO Play anterior** (negro, tarjetas #242424, naranja, Inter y Font Awesome auto-hospedados en `public/assets/vendor/`, licencias en `LICENCIAS.txt`):
-**barra lateral** (Inicio, Buscar, Bienestar, Naturaleza; *Tu Música*: Historial, Favoritos y playlists, Para ti; *Descubrir*: 9 atajos de género que arrancan la radio continua;
+**barra lateral** (Inicio, Buscar, Bienestar, Naturaleza; *Tu Música*: Historial, Favoritos y playlists, Para ti; *Descubrir*: 9 atajos de género que arrancan la radio continua; al pie, **Vista simple** lleva a `/panel/simple`, que a su vez tiene «Panel completo» para volver;
 se puede contraer), **barra superior** (buscador, Apariencia, Ayuda y cuenta) y **barra de reproducción** abajo (portada, título,
 género, anterior / play / siguiente, progreso que se puede mover, Me gusta / No me gusta / playlist, volumen, letra, karaoke, visualizador, naturaleza y **Ver video**; si el navegador no deja
 sonar sin un toque, la música arranca con el primer clic que se haga en el panel). **Inicio es la radio**: subpestañas *Recomendado* («Lo más escuchado del momento»: artistas y géneros; con sesión, también «Recomendado para ti»; Bienestar rápido
-y géneros destacados), *Bienestar* y *Podcasts* (temas sugeridos y, debajo, sus episodios con portada: *Escuchar* o *Ver video*). Mientras se busca o la IA
-piensa aparece una **capa de carga grande** («Pensando…», «Buscando lo mejor para recomendarte»; se quita sola al sonar y tiene «Ocultar»; el texto de abajo se vuelve más claro si la espera se alarga). Las listas muestran **esqueletos** (la silueta de lo que viene) en vez de un «Cargando…» seco. **Ver video** muestra
+y géneros destacados, con «Ver todos los géneros» debajo: la lista completa, filtrable y solo texto), *Bienestar* y *Podcasts* (temas sugeridos y, debajo, sus episodios con portada: *Escuchar* o *Ver video*). Mientras se busca o la IA
+piensa aparece una **capa de carga grande** («Pensando…», «Buscando lo mejor para recomendarte»; se quita sola al sonar y tiene «Ocultar»; el texto de abajo se vuelve más claro si la espera se alarga). Las listas muestran **esqueletos** (la silueta de lo que viene) y las secciones que se abren por primera vez, un ecualizador pequeño, en vez de un «Cargando…» seco. «Sugerido por IA» solo aparece cuando lo sugirió Gemini (con el motor local no se muestra nada). **Ver video** muestra
 el video (sin sonido propio, sigue al audio) de lo que suena; solo se pide mientras está abierto. En el celular (≤ 768 px) no hay barra lateral: abajo van la barra compacta y las pestañas Inicio, Bienestar, Descubrir (el menú) y Biblioteca.
 El **motor de audio** es un iframe oculto (`/?view=local&mode=audio&sid=…`) que se crea una vez: navegar no corta la música. Cada módulo pesado se descarga al abrir su vista.
 Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno nuevo, corre `node scripts/recortar-iconos.js` (la prueba `panel-iconos` lo exige).
@@ -93,7 +93,7 @@ Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno
 - **Para ti / IA:** recomendado ahora, hecho para ti, descubrir, artistas, podcasts y playlists. Usa **Gemini** si hay `GEMINI_KEY` (límite de 30/min y 1500/día,
   cortacircuitos) y si no, o si falla, un motor **local** con semillas (`data/seed/`). El oyente no nota la diferencia salvo en la variedad.
 - **Bienestar (Viaje ISO):** eliges cómo estás (18 ánimos), a dónde quieres llegar (6), estilo, idioma, duración e intensidad; el plan va por 5 fases
-  de energía (cada fase muestra su carácter musical: Calma, Concentración, Buen ánimo…) y al terminar **continúa** sin silencio. El viaje es de esa sesión: no cambia lo que suena en las pantallas ni a otros oyentes.
+  de energía (cada fase muestra su carácter musical —Calma, Concentración, Buen ánimo…— y los géneros que sonarán; dura un número fijo de canciones según la duración elegida —2, 3 o 5— y avanza sola: la fase en curso dice «Canción 2 de 3» y cuánto falta para la siguiente) y al terminar **continúa** sin silencio. El viaje es de esa sesión: no cambia lo que suena en las pantallas ni a otros oyentes.
   Cada fase tiene un **carácter** con géneros curados y familiares (`src/bienestar.js`, `CARACTERES`): se empieza reconociendo el ánimo
   (estrés → soft rock/pop suave; enojo → rock; tristeza → baladas y boleros) y se pasa al del destino (relajar → lo-fi, acústico, bossa; dormir → instrumental;
   concentrarse → estudio, clásica, jazz; energía → pop, rock, cumbia, electrónica). Un viaje para calmar nunca pasa por música de fiesta o agresiva.

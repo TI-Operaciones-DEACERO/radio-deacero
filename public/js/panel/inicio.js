@@ -156,6 +156,7 @@
     grid.replaceChildren(...P.esqueleto('genero', 8));
     const r = await A.generos();
     const gens = r.ok ? R.generosDestacados(r.data) : [];
+    prepararTodos(r.ok ? r.data : null);
     if (!gens.length) {
       grid.replaceChildren(h('li', { class: 'vacio' }, [h('p', { text: L.mensajeError(r.status) }), h('button', { type: 'button', class: 'primary', text: 'Reintentar', onclick: cargarGeneros })]));
       return;
@@ -175,6 +176,32 @@
     }));
     P.remarcarSonando();
   }
+
+  /* ───────────── Todos los géneros: botón que abre la lista completa con filtro (se pinta al abrirla) ───────────── */
+  let todosGen = null;
+  function prepararTodos(lista) {
+    todosGen = R.todosLosGeneros(lista);
+    const btn = $('genTodosBtn');
+    btn.hidden = !todosGen.length;
+    btn.textContent = 'Ver todos los géneros (' + todosGen.length + ')';
+  }
+  function pintarTodos() {
+    const q = $('genTodosQ').value;
+    const gens = R.todosLosGeneros(todosGen, q);
+    $('genTodosN').textContent = q.trim() ? (gens.length === 1 ? '1 género' : gens.length + ' géneros') : '';
+    /* Solo texto: cientos de emojis serían cientos de imágenes (la Pi no lo agradece) */
+    $('genTodosLista').replaceChildren(...(gens.length ? gens.map((g) => h('li', {}, h('button', { type: 'button', class: 'chip', 'data-genero': g.id, title: g.label + ': iniciar radio continua', onclick: () => P.radioGenero(g.id, g.label) }, [g.label, h('span', { class: 'sr-only sonando-txt' })]))) : [h('li', { class: 'vacio', text: 'Ningún género coincide.' })]));
+    P.remarcarSonando();
+  }
+  $('genTodosBtn').addEventListener('click', () => {
+    const abrir = $('genTodos').hidden;
+    $('genTodos').hidden = !abrir;
+    $('genTodosBtn').setAttribute('aria-expanded', String(abrir));
+    $('genTodosBtn').textContent = abrir ? 'Ocultar la lista de géneros' : 'Ver todos los géneros (' + todosGen.length + ')';
+    if (abrir) { pintarTodos(); $('genTodosQ').focus(); }
+  });
+  let tFiltro = 0;
+  $('genTodosQ').addEventListener('input', () => { clearTimeout(tFiltro); tFiltro = setTimeout(pintarTodos, 150); });
 
   /* ───────────── Podcasts: temas (carrusel) → episodios con portada; cada uno se escucha o se ve en video ───────────── */
   const revisarPod = carrusel($('podScroll'), $('podPrev'), $('podNext'));

@@ -30,6 +30,7 @@
   /* /panel = este mismo panel, pero la música suena en ESTE navegador: el reproductor (app.js con ?view=local) corre en un
      iframe invisible y las órdenes van directo a él, no a /api/cmd (que las reparte a todas las pantallas). */
   const LOCAL = /^\/panel(\/simple)?\/?$/.test(location.pathname); /* /panel/simple = este panel cuando /panel es el panel completo (Fase 8) */
+  if (LOCAL) document.getElementById('aCompleto').hidden = false; /* de regreso al panel completo */
   let engine = null;
   const player = () => (engine && engine.contentWindow && engine.contentWindow.__player) || null;
   if (LOCAL) {

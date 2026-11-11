@@ -10,12 +10,12 @@
   const cuentaTxt = (n) => (n === 1 ? '1 canción' : n + ' canciones');
   const duracion = (t) => (t && t.duration > 0 ? ' · ' + U.fmtTime(t.duration) : '');
 
-  /* Sin nómina todo se guarda en este navegador: se avisa arriba, con la opción de entrar. */
+  /* Sin nómina todo se guarda en este navegador: arriba se invita a iniciar con la nómina (sin hablar de «navegador»). */
   function avisoLocal(el) {
     if (P.usuario() || !el.firstChild) return;
     el.prepend(h('div', { class: 'aviso-local' }, [
-      h('p', { class: 'aviso', text: 'Se guarda solo en este navegador. Entra con tu nómina para tenerlo en tu cuenta, en cualquier equipo.' }),
-      h('button', { type: 'button', class: 'ghost corto', text: 'Entrar con mi nómina', onclick: () => P.abrirCuenta() })
+      h('p', { class: 'aviso' }, [h('strong', { text: 'Continúa donde sea.' }), ' Inicia con tu nómina y llévate tus Me gusta, playlists e historial a cualquier equipo.']),
+      h('button', { type: 'button', class: 'ghost corto', text: 'Iniciar con mi nómina', onclick: () => P.abrirCuenta() })
     ]));
   }
   function errorCon(r, reintentar) {
@@ -54,8 +54,8 @@
     const lista = P.reacciones.lista('like').map((x) => x.track);
     const partes = [h('div', { class: 'sub-cab' }, [h('h2', { text: 'Mis Me gusta' }), h('span', { class: 'contador', 'aria-live': 'polite', text: cuentaTxt(lista.length) })])];
     if (!P.usuario()) {
-      partes.push(h('p', { class: 'aviso', text: 'Estos Me gusta se guardan solo en este navegador. Entra con tu nómina y se guardan en tu cuenta para que los tengas donde sea.' }));
-      partes.push(h('div', { class: 'row izq' }, [h('button', { type: 'button', class: 'ghost', text: 'Entrar con mi nómina', onclick: () => P.abrirCuenta() })]));
+      partes.push(h('p', { class: 'aviso' }, [h('strong', { text: 'Continúa donde sea.' }), ' Inicia con tu nómina y llévate tus Me gusta, playlists e historial a cualquier equipo.']));
+      partes.push(h('div', { class: 'row izq' }, [h('button', { type: 'button', class: 'ghost', text: 'Iniciar con mi nómina', onclick: () => P.abrirCuenta() })]));
     }
     if (!lista.length) {
       partes.push(h('p', { class: 'hint', text: 'Todavía no tienes Me gusta. Mientras suena una canción, toca el pulgar hacia arriba de la barra de abajo.' }));

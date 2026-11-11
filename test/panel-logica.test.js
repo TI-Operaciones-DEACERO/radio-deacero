@@ -152,7 +152,7 @@ test('estadoViaje: fase y tema actuales según getState().viaje', () => {
   assert.equal(sin.total, 5);
   const e = L.estadoViaje(PLAN, { fase: 2, tema: 1, porFase: 3, continuando: false, energia: 0.6, nombre: 'Despertar' });
   assert.deepEqual({ a: e.activo, i: e.faseIdx, t: e.tema, p: e.porFase, fin: e.terminado, n: e.nombre, en: e.energia }, { a: true, i: 1, t: 1, p: 3, fin: false, n: 'Despertar', en: 0.6 });
-  assert.equal(L.resumenFase(e), 'Fase 2 de 5 · Despertar · Tema 1/3');
+  assert.equal(L.resumenFase(e), 'Fase 2 de 5 · Despertar · Canción 1 de 3');
 });
 
 test('estadoViaje: al terminar la fase 5 queda "terminado" (la música continúa) y no se sale de rango', () => {
@@ -187,10 +187,33 @@ test('topAnimos: los más usados primero, completa con los de siempre, sin repet
   const u = { a: 1 }; L.sumarUso(u, 'b'); assert.deepEqual(u, { a: 1 });
 });
 
-test('fuenteTexto: IA o reglas locales', () => {
+test('fuenteTexto: solo se dice cuando lo sugirió la IA (las reglas locales no se anuncian: era ruido técnico)', () => {
   assert.equal(L.fuenteTexto('gemini'), 'Sugerido por IA');
-  assert.equal(L.fuenteTexto('local'), 'Sugerido por reglas locales');
-  assert.equal(L.fuenteTexto(undefined), 'Sugerido por reglas locales');
+  assert.equal(L.fuenteTexto('local'), '');
+  assert.equal(L.fuenteTexto(undefined), '');
+});
+
+test('avanceFase: dice cuánto falta para la siguiente fase o para el destino', () => {
+  const en = (fase, tema) => L.estadoViaje(PLAN, { fase, tema, porFase: 3, continuando: false, nombre: 'F' });
+  assert.equal(L.avanceFase(en(2, 1)), 'Faltan 2 canciones para pasar a la fase 3');
+  assert.equal(L.avanceFase(en(2, 2)), 'Falta 1 canción para pasar a la fase 3');
+  assert.equal(L.avanceFase(en(2, 3)), 'Al terminar esta canción pasas a la fase 3');
+  assert.equal(L.avanceFase(en(5, 1)), 'Faltan 2 canciones para llegar a tu destino');
+  assert.equal(L.avanceFase(en(5, 3)), 'Al terminar esta canción llegas a tu destino');
+  assert.equal(L.avanceFase(L.estadoViaje(PLAN, { fase: 5, continuando: true })), '');
+  assert.equal(L.avanceFase(L.estadoViaje(PLAN, null)), '');
+  assert.equal(L.avanceFase(null), '');
+});
+
+test('estadoFase: cuántas canciones dura cada fase y en cuál vas', () => {
+  const ev = L.estadoViaje(PLAN, { fase: 2, tema: 2, porFase: 3, continuando: false, nombre: 'F' });
+  assert.equal(L.estadoFase(ev, 0, 3), 'Lista');
+  assert.equal(L.estadoFase(ev, 1, 3), 'Canción 2 de 3');
+  assert.equal(L.estadoFase(ev, 2, 3), '3 canciones');
+  assert.equal(L.estadoFase(L.estadoViaje(PLAN, null), 0, 3), '3 canciones');
+  assert.equal(L.estadoFase(L.estadoViaje(PLAN, null), 0, 1), '1 canción');
+  assert.equal(L.estadoFase(L.estadoViaje(PLAN, { fase: 5, continuando: true }), 4, 3), 'Lista');
+  assert.equal(L.estadoFase(L.estadoViaje(PLAN, null), 0, 0), 'Pendiente');
 });
 
 test('nextTabIndex: flechas con vuelta, Inicio y Fin; otras teclas no hacen nada', () => {

@@ -142,7 +142,23 @@
   function resumenFase(ev) {
     if (!ev || !ev.activo) return '';
     if (ev.terminado) return 'Viaje completo: la música continúa en esta energía';
-    return 'Fase ' + (ev.faseIdx + 1) + ' de ' + ev.total + ' · ' + ev.nombre + ' · Tema ' + ev.tema + '/' + ev.porFase;
+    return 'Fase ' + (ev.faseIdx + 1) + ' de ' + ev.total + ' · ' + ev.nombre + ' · Canción ' + ev.tema + ' de ' + ev.porFase;
+  }
+  const canciones = (n) => n + (n === 1 ? ' canción' : ' canciones');
+  /* Cuánto falta: cada fase dura porFase canciones y avanza sola (no hay que hacer nada más que escuchar). */
+  function avanceFase(ev) {
+    if (!ev || !ev.activo || ev.terminado || !(ev.porFase > 0)) return '';
+    const resta = Math.max(0, ev.porFase - ev.tema);
+    const meta = ev.faseIdx + 1 >= ev.total ? 'llegar a tu destino' : 'pasar a la fase ' + (ev.faseIdx + 2);
+    if (resta === 0) return 'Al terminar esta canción ' + (ev.faseIdx + 1 >= ev.total ? 'llegas a tu destino' : 'pasas a la fase ' + (ev.faseIdx + 2));
+    return (resta === 1 ? 'Falta ' : 'Faltan ') + canciones(resta) + ' para ' + meta;
+  }
+  /* Etiqueta de la fase i en la lista: Lista / Canción t de n / cuántas canciones dura. */
+  function estadoFase(ev, i, porFase) {
+    const hecha = ev && ev.activo && (ev.terminado || i < ev.faseIdx);
+    if (hecha) return 'Lista';
+    if (ev && ev.activo && i === ev.faseIdx) return 'Canción ' + ev.tema + ' de ' + ev.porFase;
+    return porFase > 0 ? canciones(porFase) : 'Pendiente';
   }
 
   /* Cuerpo de POST /api/bienestar/viaje: solo lo que tiene valor. Si hay ánimo elegido va `estado`; si no, el texto libre. */
@@ -174,7 +190,7 @@
   const sumarUso = (usos, id) => { const o = mapa(usos); o[id] = (tiene(o, id) ? o[id] : 0) + 1; return o; };
 
   /* — IA — */
-  const fuenteTexto = (fuente) => (fuente === 'gemini' ? 'Sugerido por IA' : 'Sugerido por reglas locales');
+  const fuenteTexto = (fuente) => (fuente === 'gemini' ? 'Sugerido por IA' : '') /* lo local no se anuncia: era ruido técnico */;
 
   /* — pestañas con flechas (patrón WAI-ARIA, pestañas en horizontal): → siguiente, ← anterior, Inicio, Fin; da vuelta en los extremos — */
   function nextTabIndex(key, i, n) {
@@ -225,7 +241,7 @@
   const api = {
     cleanTrack, trackConGenero, nextReaction, setReaction, restoreEntry, reactionOf, listByReaction, fromServerList, parseLocalLikes, serializeLikes,
     toMergeItems, mergeLocalWithAccount, shouldLogHistory, queueFromTracks, queueFromQueries,
-    energiaTexto, energiaAncho, estadoViaje, resumenFase, armarPeticionViaje, peticionValida, topAnimos, sumarUso,
+    energiaTexto, energiaAncho, estadoViaje, resumenFase, avanceFase, estadoFase, armarPeticionViaje, peticionValida, topAnimos, sumarUso,
     fuenteTexto, nextTabIndex, atajoDeTecla, mensajeError, validSid, makeSid
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

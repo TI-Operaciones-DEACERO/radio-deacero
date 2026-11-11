@@ -30,6 +30,17 @@
     return DESTACADOS.filter((id) => porId.has(id)).map((id) => porId.get(id));
   }
 
+  /* «Todos los géneros»: la lista completa por nombre, filtrable sin importar acentos ni mayúsculas (nombre, id y descripción). */
+  const plano = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  function todosLosGeneros(lista, q) {
+    if (!Array.isArray(lista)) return [];
+    const t = plano(q).trim();
+    return lista
+      .filter((g) => g && typeof g.id === 'string' && g.id && typeof g.label === 'string' && g.label)
+      .filter((g) => !t || plano(g.label + ' ' + g.id + ' ' + (g.desc || '')).includes(t))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+  }
+
   /* El color de un género va a una variable CSS: solo hexadecimal. */
   const colorSeguro = (c) => (typeof c === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(c) ? c : '');
 
@@ -169,7 +180,7 @@
 
   const api = {
     textoAnuncio, escribiendo, altoBarra,
-    DESCUBRIR, DESTACADOS, generosDestacados, colorSeguro, generoSonando, intercalar,
+    DESCUBRIR, DESTACADOS, generosDestacados, todosLosGeneros, colorSeguro, generoSonando, intercalar,
     fmtTiempo, progreso, segundosDesde, iconoVolumen, valorConTecla, textoVolumen,
     CARACTERES, etiquetaCaracter, cargaTermina, cargaSola,
     destino, MENU, vistaDeAtajo, pestanaMovil
