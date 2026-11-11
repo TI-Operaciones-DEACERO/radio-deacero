@@ -65,8 +65,6 @@
   </div>
 
   <div class="sidebar-bottom">
-    <!-- Solo aparece si GET /api/admin/estado responde 200 (la propia máquina o con la clave) -->
-    <button type="button" class="nav-item sidebar-admin-btn" id="tab-admin" data-vista="admin" title="Administración" hidden><i class="fas fa-shield-halved nav-ico" aria-hidden="true"></i><span class="nav-txt">Administración</span></button>
   </div>
 </nav>
 
@@ -105,13 +103,13 @@
         <section class="aireco-section" aria-labelledby="recoT">
           <div class="aireco-header">
             <div class="aireco-title-wrap">
-              <img class="aireco-spark" src="/assets/emoji/2728.svg" alt="" width="28" height="28">
+              <img class="aireco-spark" src="/assets/emoji/1f525.svg" alt="" width="28" height="28">
               <div>
-                <h2 class="aireco-title" id="recoT">Mira lo que la IA tiene para ti</h2>
-                <p class="aireco-subtitle" id="recoSub">Seleccionado para este momento del día</p>
+                <h2 class="aireco-title" id="recoT">Lo más escuchado del momento</h2>
+                <p class="aireco-subtitle" id="recoSub">Artistas y géneros que suenan ahora en la planta y a esta hora del día</p>
               </div>
             </div>
-            <button type="button" class="aireco-refresh-btn" id="recoAct" aria-label="Nuevas sugerencias" title="Nuevas sugerencias"><i class="fas fa-rotate-right" aria-hidden="true"></i></button>
+            <button type="button" class="aireco-refresh-btn" id="recoAct" aria-label="Actualizar lo más escuchado" title="Actualizar"><i class="fas fa-rotate-right" aria-hidden="true"></i></button>
           </div>
           <div class="aireco-carousel-wrap">
             <button type="button" class="aireco-carousel-btn" id="recoPrev" aria-controls="recoCards" aria-label="Ver sugerencias anteriores" title="Anteriores"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
@@ -123,6 +121,27 @@
           <p class="fuente" id="recoFuente"></p>
         </section>
 
+        <!-- Recomendado para ti: solo con sesión; según lo que la persona escucha y marca con Me gusta (lo anterior es de toda la planta) -->
+        <section class="aireco-section" id="paraTiSec" aria-labelledby="ptT" hidden>
+          <div class="aireco-header">
+            <div class="aireco-title-wrap">
+              <img class="aireco-spark" src="/assets/emoji/1f3a7.svg" alt="" width="28" height="28">
+              <div>
+                <h2 class="aireco-title" id="ptT">Recomendado para ti</h2>
+                <p class="aireco-subtitle" id="ptSub">Según lo que escuchas y tus Me gusta</p>
+              </div>
+            </div>
+            <button type="button" class="aireco-refresh-btn" id="ptAct" aria-label="Nuevas recomendaciones para ti" title="Nuevas recomendaciones"><i class="fas fa-rotate-right" aria-hidden="true"></i></button>
+          </div>
+          <div class="aireco-carousel-wrap">
+            <button type="button" class="aireco-carousel-btn" id="ptPrev" aria-controls="ptCards" aria-label="Ver recomendaciones anteriores" title="Anteriores"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+            <div class="aireco-scroll" id="ptScroll">
+              <ul class="aireco-cards" id="ptCards" aria-labelledby="ptT" aria-describedby="ptSub"></ul>
+            </div>
+            <button type="button" class="aireco-carousel-btn" id="ptNext" aria-controls="ptCards" aria-label="Ver más recomendaciones" title="Más"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+          </div>
+        </section>
+
         <section class="aireco-section mj-embed-card" aria-labelledby="bzqT">
           <div class="mj-embed-head">
             <img class="mj-embed-icon" src="/assets/emoji/1f9d8.svg" alt="" width="36" height="36">
@@ -132,7 +151,7 @@
             </div>
             <button type="button" class="mj-embed-more" id="bzqMas">Personalizar <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
           </div>
-          <div id="bzqGrupos"><p class="cargando">Cargando…</p></div>
+          <div id="bzqGrupos" aria-busy="true"><ul class="mj-quick-grid esq-fila-chips" aria-hidden="true"><li class="esq esq-chip"></li><li class="esq esq-chip"></li><li class="esq esq-chip"></li><li class="esq esq-chip"></li><li class="esq esq-chip"></li><li class="esq esq-chip"></li></ul><p class="sr-only" role="status">Cargando…</p></div>
         </section>
 
         <section class="aireco-section" aria-labelledby="genT">
@@ -176,7 +195,6 @@
     <section class="pnl" id="p-parati" aria-label="Para ti" hidden></section>
     <section class="pnl" id="p-favoritos" aria-label="Favoritos" hidden></section>
     <section class="pnl" id="p-naturaleza" aria-label="Naturaleza" hidden></section>
-    <section class="pnl" id="p-admin" aria-label="Administración" hidden></section>
   </main>
 </div>
 
@@ -186,7 +204,7 @@
 <!-- Cargando: grande, mientras se busca / piensa la IA. No es modal: «Ocultar» lo quita y la música llega igual. -->
 <div id="carga" class="carga" hidden>
   <div class="carga-caja">
-    <span class="carga-giro" aria-hidden="true"></span>
+    <span class="carga-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
     <p class="carga-txt" id="cargaTxt"></p>
     <p class="carga-sub" id="cargaSub"></p>
   </div>
@@ -305,26 +323,19 @@
   </section>
 </dialog>
 
-<!-- Apariencia: tema y acceso de administración -->
+<!-- Apariencia: tema y sonido -->
 <dialog id="apariencia" aria-labelledby="apTitle">
   <h2 id="apTitle">Apariencia</h2>
   <fieldset class="temas">
     <legend>Tema</legend>
     <div class="temas-grid" id="temasGrid"></div>
   </fieldset>
-  <details class="pers" id="apAdmin">
-    <summary>¿Administras este equipo?</summary>
-    <form id="claveForm" novalidate>
-      <p class="hint">Pega la clave de administración (la del control remoto). Se guarda solo en este navegador y viaja únicamente en las peticiones de Administración.</p>
-      <label for="claveIn">Clave de administración</label>
-      <input id="claveIn" type="password" autocomplete="off" maxlength="200" spellcheck="false">
-      <p class="err" id="claveErr" role="alert" hidden></p>
-      <div class="row">
-        <button type="button" class="ghost" id="claveOlvidar" hidden>Olvidar clave</button>
-        <button type="submit" class="primary">Entrar a Administración</button>
-      </div>
-    </form>
-  </details>
+  <fieldset class="sonido">
+    <legend>Sonido</legend>
+    <label class="check" for="locutorOn"><input type="checkbox" id="locutorOn" checked aria-describedby="locutorNota"><span>Locutor: decir «Estás escuchando…» al elegir música</span></label>
+    <p class="hint" id="locutorNota"></p>
+  </fieldset>
+  <p class="hint">¿Administras este equipo? Administración está en su propia página: <a class="link" href="/admin">Ir a Administración</a> (pide la clave del control remoto).</p>
   <div class="row"><button type="button" class="ghost" id="apCerrar">Cerrar</button></div>
 </dialog>
 
@@ -352,9 +363,11 @@
 <script src="/js/util.js"></script>
 <script src="/js/panel/logica.js"></script>
 <script src="/js/panel/radio-logica.js"></script>
+<script src="/js/panel/locutor-logica.js"></script>
 <script src="/js/panel/biblioteca-local.js"></script>
 <script src="/js/panel/api.js"></script>
 <script src="/js/panel/nucleo.js"></script>
+<script src="/js/panel/portadas.js"></script>
 <script src="/js/panel/inicio.js"></script>
 <script src="/js/panel/cuenta.js"></script>
 </body>

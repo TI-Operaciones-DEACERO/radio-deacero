@@ -69,7 +69,7 @@ function localIps() {
 /* Id de sesión de un oyente independiente (/panel): lo inventa el navegador. */
 const SESSION_ID = /^[A-Za-z0-9_-]{8,40}$/;
 
-function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, onGenero, token = '', trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
+function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, muestras, popularidad, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, onGenero, token = '', entradaSecreto = '', relojEntrada = null, claveMax = 15, muestraArtistaMax = 20, trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
   const anotar = (servicio, nivel, msg) => { if (diag) diag.add(servicio, nivel, msg); };
   const permite = (t) => (ajustes ? ajustes.permite(t) : true);
   const admin = createAdminRoutes({
@@ -89,8 +89,11 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
   const bienestar = radio && radio.startViaje ? createBienestarRoutes({ radio, genres, library, json: (...a) => json(...a), ...(bienestarMax ? { max: bienestarMax } : {}) }) : null;
   const iaApi = ia ? createIaRoutes({ ia, library, clock: () => (timesync ? timesync.current() : Date.now()), json: (...a) => json(...a), ...(iaMax ? { max: iaMax } : {}), ...(iaGeminiMax ? { geminiMax: iaGeminiMax } : {}) }) : null;
   const nextLimiter = createLimiter({ max: nextMax, windowMs: 60 * 1000 }); /* cada /api/next puede lanzar búsquedas en yt-dlp */
+  const muestraLimiter = createLimiter({ max: 4 * nextMax, windowMs: 60 * 1000 }); /* los banners de GÉNERO piden muchas (con caché y de pocas en pocas en el servidor) */
+  const muestraArtistaLimiter = createLimiter({ max: muestraArtistaMax, windowMs: 60 * 1000 }); /* cada artista NUEVO es una búsqueda de yt-dlp: cupo corto, como /api/buscar */
+  const claveLimiter = createLimiter({ max: claveMax, windowMs: 15 * 60 * 1000 }); /* intentos de clave MALOS por IP */
   const me = library ? createMeRoutes({ library, json: (...a) => json(...a), ...(meMax ? { max: meMax } : {}) }) : null;
-  const auth = users && sessions ? createAuthRoutes({ users, sessions, library, json: (...a) => json(...a), cookieSecure, now, ...(loginMax ? { loginMax } : {}) }) : null;
+  const auth = users && sessions ? createAuthRoutes({ users, sessions, library, json: (...a) => json(...a), cookieSecure, now, entradaSecreto, relojEntrada, ...(loginMax ? { loginMax } : {}) }) : null;
   const root = path.resolve(publicDir);
 
   const json = (res, code, body, extra = {}) => {
@@ -105,6 +108,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     else if (completo && (pathname === '/panel' || pathname === '/panel/')) pathname = '/panel-completo.html'; /* Fase 8: /panel ES el panel completo */
     /* El panel de siempre: reproduce en este navegador (remote.js lo decide por la ruta). Con el cambio de la Fase 8 vive en /panel/simple. */
     if (pathname === '/panel' || pathname === '/panel/' || pathname === '/panel/simple' || pathname === '/panel/simple/') pathname = '/remote.html';
+    if (pathname === '/admin' || pathname === '/admin/') pathname = '/admin.html'; /* Administración: página aparte, pide la clave de /remote */
     if (pathname === '/kiosco' || pathname === '/kiosco/') pathname = '/index.html'; /* misma página; la vista la elige app.js por la ruta */
     let rel;
     try { rel = decodeURIComponent(pathname); } catch { return json(res, 400, { error: 'URL inválida' }); }
@@ -119,7 +123,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
         'content-length': st.size,
         'cache-control': 'no-cache',
         ...SEC_HEADERS,
-        ...(path.basename(file) === 'panel-completo.html' ? { 'content-security-policy': PANEL_CSP } : {})
+        ...(['panel-completo.html', 'admin.html'].includes(path.basename(file)) ? { 'content-security-policy': PANEL_CSP } : {})
       });
       fs.createReadStream(file).pipe(res);
     });
@@ -130,6 +134,17 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     if (trustLoopback && LOOPBACK.has(req.socket.remoteAddress)) return true;
     const given = req.headers['x-token'] || url.searchParams.get('t') || '';
     return safeEqual(given, token);
+  }
+
+  /* Adivinar la clave: solo cuentan los intentos MALOS con una clave puesta (sin clave no se gasta nada). Pasado el tope la IP recibe 429, aun con la buena,
+   * hasta que acabe la ventana. → segundos de espera si está bloqueada, o 0. */
+  function topeClave(req, url, buena) {
+    if (!token || !(req.headers['x-token'] || url.searchParams.get('t'))) return 0;
+    const k = ipKey(req.socket.remoteAddress);
+    const p = claveLimiter.peek(k);
+    if (!p.ok) return p.retryAfter;
+    if (!buena) claveLimiter.hit(k);
+    return 0;
   }
 
   /* Administración de cuentas: sin REMOTE_TOKEN NO se abre a la red (el resto de rutas sí, como siempre); solo la propia máquina. */
@@ -273,6 +288,7 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
         if (evitar.length) opts.avoidGenres = evitar; /* con cuenta: lo que no le gusta no sale en su rotación */
         const r = await radio.next(opts);
         ytdlp.resolve(r.track.id, 'audio').catch(() => {}); /* precalienta: el cliente lo pide enseguida */
+        if (popularidad) { try { popularidad.registrar({ channel: r.track.channel, genre: r.genre && r.genre.id }); } catch (_) { /* solo estadística */ } }
         if (onGenero && r.genre && genreIds.has(r.genre.id)) { try { onGenero(r.genre.id); } catch (_) { /* solo es un aviso */ } }
         return json(res, 200, r);
       } catch (e) {
@@ -299,6 +315,26 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
       return res.end(t.body);
     }
 
+    /* Muestra del banner de un género (?g=id) o de un artista (?a=texto, con sesión: lanza una búsqueda). La respuesta es solo { id, title, duration }:
+     * el navegador pide la carátula y el miniclip a /api/thumb y /api/play como siempre. */
+    if (p === '/api/muestra') {
+      if (!muestras) return json(res, 404, { error: 'Endpoint no encontrado' });
+      const g = q.get('g'), a = q.get('a');
+      let r = null;
+      if (g !== null) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(g)) return json(res, 400, { error: 'GENERO' });
+        r = genreIds.has(g) ? await muestras.genero(g) : null;
+      } else if (a !== null) {
+        const texto = a.trim();
+        if (!texto || a.length > 100) return json(res, 400, { error: 'ARTISTA' });
+        if (!SESSION_ID.test(q.get('sid') || '') && !authorized(req, url)) return json(res, 401, { error: 'UNAUTHORIZED' });
+        const lim = muestraArtistaLimiter.hit(ipKey(req.socket.remoteAddress));
+        if (!lim.ok) return json(res, 429, { error: 'DEMASIADAS_PETICIONES' }, { 'retry-after': String(lim.retryAfter) });
+        r = await muestras.artista(texto);
+      } else return json(res, 400, { error: 'FALTA_G_O_A' });
+      return r ? json(res, 200, r) : json(res, 404, { error: 'SIN_MUESTRA' });
+    }
+
     if (p === '/api/lyrics') {
       /* Abierta al oyente: con tope de largo (salen a lrclib / lyrics.ovh y son la llave de la caché). */
       const title = (q.get('title') || '').trim().slice(0, 200);
@@ -314,6 +350,12 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
     let url;
     try { url = new URL(req.url, 'http://localhost'); } catch { return json(res, 400, { error: 'URL inválida' }); }
     const fail = (e) => { anotar('servidor', 'error', `${req.method} ${url.pathname}: ${e && e.message}`); if (!res.headersSent) json(res, 500, { error: 'INTERNAL' }); else res.destroy(); };
+    if (url.pathname === '/entrar') { /* otro sistema manda a la persona a la radio con la sesión iniciada (ver authroutes.js) */
+      if (!auth) return json(res, 404, { error: 'No encontrado' });
+      if (req.method !== 'GET') return json(res, 405, { error: 'Método no permitido' });
+      if (!hostAllowed(req.headers.host, hostsPermitidos)) return json(res, 421, { error: 'HOST' });
+      try { return auth.entrarPorUrl(req, res, url); } catch (e) { return fail(e); }
+    }
     if (!url.pathname.startsWith('/api/')) {
       if (req.method !== 'GET') return json(res, 405, { error: 'Método no permitido' });
       return Promise.resolve(serveStatic(url.pathname, res)).catch(fail);
@@ -326,16 +368,27 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, lyrics, 
       if (req.method !== 'GET' || policy.pathExists(url.pathname)) return json(res, 405, { error: 'Método no permitido' });
       /* Bajo /api/admin/ manda la regla de administración (sin REMOTE_TOKEN, solo la propia máquina). Y lo no declarado NO llega a
        * ningún manejador (algunos atienden por prefijo): se responde 404 aquí mismo. */
+      const topeA = topeClave(req, url, url.pathname.startsWith('/api/admin/') ? adminAuthorized(req, url) : authorized(req, url));
+      if (topeA) return json(res, 429, { error: 'DEMASIADOS_INTENTOS' }, { 'retry-after': String(topeA) });
       if (!(url.pathname.startsWith('/api/admin/') ? adminAuthorized(req, url) : authorized(req, url))) return json(res, 401, { error: 'UNAUTHORIZED' });
       return json(res, 404, { error: 'Endpoint no encontrado' });
     }
     if (/^\/api\/(auth|admin)\//.test(url.pathname) && !hostAllowed(req.headers.host, hostsPermitidos)) return json(res, 421, { error: 'HOST' });
     if (req.method !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: 'ORIGIN' });
     if (route.level === 'oyente' && !isListenerRequest(req, url, route) && !authorized(req, url)) return json(res, 401, { error: 'UNAUTHORIZED' });
-    if (route.level === 'clave' && !(url.pathname.startsWith('/api/admin/') ? adminAuthorized(req, url) : authorized(req, url))) return json(res, 401, { error: 'UNAUTHORIZED' });
+    if (route.level === 'clave') {
+      const buena = url.pathname.startsWith('/api/admin/') ? adminAuthorized(req, url) : authorized(req, url);
+      const tope = topeClave(req, url, buena);
+      if (tope) return json(res, 429, { error: 'DEMASIADOS_INTENTOS' }, { 'retry-after': String(tope) });
+      if (!buena) return json(res, 401, { error: 'UNAUTHORIZED' });
+    }
     if (route.level === 'usuario' && !(auth && auth.currentUser(req))) return json(res, 401, { error: 'NO_SESSION' });
     if (url.pathname === '/api/next' || url.pathname === '/api/podcast/search' || url.pathname === '/api/buscar' || url.pathname === '/api/lyrics') {
       const lim = nextLimiter.hit(ipKey(req.socket.remoteAddress));
+      if (!lim.ok) return json(res, 429, { error: 'DEMASIADAS_PETICIONES' }, { 'retry-after': String(lim.retryAfter) });
+    }
+    if (url.pathname === '/api/muestra') {
+      const lim = muestraLimiter.hit(ipKey(req.socket.remoteAddress));
       if (!lim.ok) return json(res, 429, { error: 'DEMASIADAS_PETICIONES' }, { 'retry-after': String(lim.retryAfter) });
     }
     return api(req, res, url).catch(fail);

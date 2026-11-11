@@ -676,6 +676,8 @@
     handleCommand,
     /* /panel la llama DENTRO de cada toque de la persona: si el navegador había bloqueado el sonido, la música arranca con ese mismo
        toque (sin botón «Toca para empezar» ni darle play aparte). Sin bloqueo no hace nada. */
+    /* El locutor de /panel baja la música mientras habla (1 = normal). */
+    duck(nivel) { if (typeof nivel === 'number' && Number.isFinite(nivel)) { duck = Math.max(0, Math.min(1, nivel)); setMediaVolume(); } },
     unlock() { if (!$('start').hidden && media.getAttribute('src')) startPlayback(); },
     getState() {
       const cur = state.current;

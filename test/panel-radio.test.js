@@ -123,22 +123,21 @@ test('destino: cada sección del menú lleva a su panel (y subpestaña); lo desc
   assert.deepEqual(R.destino('historial'), { vista: 'historial', panel: 'favoritos', sub: 'historial' });
   assert.deepEqual(R.destino('favoritos'), { vista: 'favoritos', panel: 'favoritos', sub: 'likes' });
   assert.deepEqual(R.destino('buscar'), { vista: 'buscar', panel: 'buscar', sub: '' });
-  assert.deepEqual(R.destino('admin'), { vista: 'admin', panel: 'admin', sub: '' });
+  assert.deepEqual(R.destino('admin'), R.destino('inicio'), 'Administración ya no es una sección del panel: vive en /admin');
   assert.deepEqual(R.destino('<img>'), R.destino('inicio'));
   assert.deepEqual(R.destino('constructor'), R.destino('inicio'));
   assert.deepEqual(R.destino(undefined), R.destino('inicio'));
 });
 
-test('vistaDeAtajo: 1–9 siguen el orden del menú; Administración solo si se ve', () => {
-  assert.equal(R.vistaDeAtajo(1, false), 'inicio');
-  assert.equal(R.vistaDeAtajo(2, false), 'buscar');
-  assert.equal(R.vistaDeAtajo(3, false), 'bienestar');
-  const sinAdmin = R.MENU.filter((v) => v !== 'admin');
-  assert.equal(R.vistaDeAtajo(sinAdmin.length, false), sinAdmin[sinAdmin.length - 1]);
-  assert.equal(R.vistaDeAtajo(sinAdmin.length + 1, false), null);
-  assert.equal(R.vistaDeAtajo(R.MENU.indexOf('admin') + 1, true), 'admin');
-  assert.equal(R.vistaDeAtajo(0, true), null);
-  assert.equal(R.vistaDeAtajo('x', true), null);
+test('vistaDeAtajo: 1–9 siguen el orden del menú (Administración ya no está en él)', () => {
+  assert.equal(R.vistaDeAtajo(1), 'inicio');
+  assert.equal(R.vistaDeAtajo(2), 'buscar');
+  assert.equal(R.vistaDeAtajo(3), 'bienestar');
+  assert.ok(!R.MENU.includes('admin'));
+  assert.equal(R.vistaDeAtajo(R.MENU.length), R.MENU[R.MENU.length - 1]);
+  assert.equal(R.vistaDeAtajo(R.MENU.length + 1), null);
+  assert.equal(R.vistaDeAtajo(0), null);
+  assert.equal(R.vistaDeAtajo('x'), null);
 });
 
 test('pestanaMovil: qué pestaña de abajo se marca en el celular', () => {
@@ -182,4 +181,16 @@ test('cargaSola: solo tras Siguiente/Anterior de la persona, pasados 700 ms, y n
   assert.equal(R.cargaSola({ ...base, descartada: true, ahora: 99999 }), false, 'la ocultó (o pasaron los 90 s): no vuelve en esta búsqueda');
   assert.equal(R.cargaSola({ ...base, cargando: false, ahora: 30000 }), false, 'ya no busca');
   assert.equal(R.cargaSola({ ...base, desde: 0, ahora: 30000 }), false, 'sin inicio conocido');
+});
+
+test('intercalar: mezcla artistas y géneros (de a N y uno de la otra lista) sin perder ni repetir nada', () => {
+  assert.deepEqual(R.intercalar(['a1', 'a2', 'a3', 'a4', 'a5'], ['g1', 'g2'], 2), ['a1', 'a2', 'g1', 'a3', 'a4', 'g2', 'a5']);
+  assert.deepEqual(R.intercalar(['a1'], ['g1', 'g2', 'g3'], 2), ['a1', 'g1', 'g2', 'g3']);
+  assert.deepEqual(R.intercalar([], ['g1'], 2), ['g1']);
+  assert.deepEqual(R.intercalar(['a1', 'a2'], [], 2), ['a1', 'a2']);
+  assert.deepEqual(R.intercalar(null, undefined, 2), []);
+  assert.deepEqual(R.intercalar(['a1', 'a2'], ['g1'], 0), ['a1', 'a2', 'g1'], 'un N raro se corrige a 2');
+  const a = ['a1', 'a2'];
+  R.intercalar(a, ['g'], 1);
+  assert.deepEqual(a, ['a1', 'a2'], 'no modifica lo que recibe');
 });

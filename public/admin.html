@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<title>Administración · DEACERO Play</title>
+<!-- Página aparte de Administración: pide la MISMA clave que /remote (REMOTE_TOKEN). Rutas absolutas, sin CDN. -->
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/vendor/inter/inter.css">
+<link rel="stylesheet" href="/assets/vendor/fontawesome/css/iconos.min.css">
+<link rel="stylesheet" href="/css/panel-completo.css">
+<script src="/js/panel/temas.js"></script>
+</head>
+<body class="pagina-admin">
+<a class="skip" href="#vista">Saltar al contenido</a>
+
+<header class="admin-cab">
+  <p class="admin-marca">DEACERO <em>Play</em> · Administración</p>
+  <nav class="admin-nav" aria-label="Administración">
+    <a class="link" href="/panel">Ir a la radio</a>
+    <button type="button" class="ghost corto" id="adminSalir" hidden title="Borra la clave de este navegador, también la del control remoto">Olvidar clave</button>
+  </nav>
+</header>
+
+<main id="vista" tabindex="-1">
+  <!-- Sin acceso: pide la clave (la del control remoto). La propia máquina entra sin clave. -->
+  <section class="admin-acceso" id="adminAcceso" aria-labelledby="accesoT" hidden>
+    <h1 id="accesoT">Clave de administración</h1>
+    <p class="hint">Escribe la clave del control remoto. Se guarda solo en esta pestaña y viaja únicamente en las peticiones de Administración.</p>
+    <form id="claveForm" novalidate>
+      <label for="claveIn">Clave</label>
+      <input id="claveIn" type="password" autocomplete="current-password" maxlength="200" spellcheck="false" aria-describedby="claveErr">
+      <p class="err" id="claveErr" role="alert" hidden></p>
+      <div class="row izq"><button type="submit" class="primary">Entrar</button></div>
+    </form>
+  </section>
+  <section class="pnl" id="p-admin" aria-label="Administración" hidden></section>
+  <p class="cargando" id="adminCargando" role="status">Comprobando acceso…</p>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script src="/js/util.js"></script>
+<script src="/js/panel/logica.js"></script>
+<script src="/js/panel/api.js"></script>
+<script src="/js/panel/admin-logica.js"></script>
+<script src="/js/panel/admin-pagina.js"></script>
+<script src="/js/panel/admin.js"></script>
+<script src="/js/panel/admin-arranque.js"></script>
+</body>
+</html>

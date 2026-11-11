@@ -25,6 +25,7 @@ node scripts/humo.js       # humo: arranca el servidor real con datos temporales
 | `PANEL_PUBLICO` | `1` | `0` obliga a usar clave también en `/panel` (por defecto `/panel` no la pide; ver la sección de seguridad) |
 | `PANEL_PRINCIPAL` | `completo` | `simple` deja `/panel` como el panel de siempre (el completo sigue en `/panel/completo`) |
 | `PANEL_V2` | `1` | `0` apaga el panel completo |
+| `ENTRADA_SECRETO` | — | Secreto para **firmar** los enlaces `/entrar` (ver *Entrar desde otro sistema*). Sin él, `/entrar` acepta la nómina sin firma (igual de abierto que el login). Puede ir en `DATA_DIR/.env` |
 | `GEMINI_KEY` | — | Clave de Gemini (IA de pago). Sin ella, o si falla o se agota la cuota, responde el **motor local** sin avisar al oyente. Solo en `.env` o el entorno, nunca en el repo |
 | `GEMINI_MODEL` | `gemini-3.7-flash` | Modelo de Gemini |
 | `CALENTAR_CADA_MS` | `15000` | Cada cuánto el **calentador** prepara (busca y resuelve) canciones de un género destacado más, para que en el panel cambiar de género empiece al instante. `0` lo apaga (ahorra CPU en la Pi) |
@@ -34,7 +35,7 @@ node scripts/humo.js       # humo: arranca el servidor real con datos temporales
 | `YTDLP_EXTRA` | — | Opciones extra, p. ej. `--cookies /ruta/cookies.txt` |
 
 Las variables pueden ir en un archivo `.env` junto a `server.js`. En `DATA_DIR/.env` (sobrevive a las actualizaciones) **solo** se aceptan `GEMINI_KEY`, `GEMINI_MODEL`,
-`REMOTE_TOKEN`, `HOSTS_PERMITIDOS`, `PANEL_V2`, `PANEL_PRINCIPAL`, `PANEL_PUBLICO` y `COOKIE_SECURE`; lo demás se ignora con un aviso al arrancar
+`REMOTE_TOKEN`, `HOSTS_PERMITIDOS`, `PANEL_V2`, `PANEL_PRINCIPAL`, `PANEL_PUBLICO`, `COOKIE_SECURE` y `ENTRADA_SECRETO`; lo demás se ignora con un aviso al arrancar
 (esa carpeta la pueden escribir otros usuarios del equipo). Lo que ya esté en el entorno manda.
 
 `?vis=0` en la URL apaga el visualizador (por si la Pi va justa).
@@ -48,6 +49,8 @@ cierra a la fuerza y no siempre guarda el último modo elegido, así que el par�
 | `/` | Reproductor normal: carátula o video a un lado, controles al otro. |
 | `/panel` | **Panel completo** (ver abajo), con el aspecto del DEACERO Play anterior. Con `PANEL_PRINCIPAL=simple`, `/panel` vuelve a ser el de siempre. `/panel/completo` funciona igual (marcadores). |
 | `/panel/simple` | **El panel de `/remote`, pero la música suena en ESTE navegador y no pide clave** (búsqueda, géneros, podcasts, pausa, volumen…). No es una pantalla ni un control remoto: no recibe las órdenes de nadie, no manda las suyas a las demás pantallas y no pisa su estado. **Lleva su propia racha** (el navegador manda un id de sesión; el servidor guarda aparte el género, las canciones que le quedan y las últimas que sonaron; caduca a las 2 h sin uso y hay tope de 100 sesiones), así que elegir género o buscar aquí NO cambia lo que suena en `/` ni en `/kiosco`. Solo audio (sin video ni letra). Los navegadores no dejan sonar sin un toque: la primera vez aparece «Toca para empezar a escuchar». Sin clave se ocultan «Guardar podcast», quitar podcasts y la pestaña *Equipos*. |
+| `/admin` | **Administración**, en su propia página: pide la **misma clave que `/remote`** (`REMOTE_TOKEN`); desde la propia máquina entra sin clave. Ver *Administración*. |
+| `/entrar` | Entrada desde otro sistema con nómina y nombre en la URL: abre la sesión y redirige a `/panel`. Ver *Entrar desde otro sistema*. |
 | `/kiosco` | **Vista kiosco, solo para ver**: el video de fondo a pantalla completa, difuminado (se distingue el video, sin detalle), y al frente la **hora en grande** (12 h con AM/PM, segundos y fecha), la canción y la que sigue. No tiene botones, barra de progreso, volumen, género ni dirección de control, y el teclado no hace nada: todo se maneja desde `/remote` (o `play`). Con `?mode=audio` el fondo es la carátula difuminada en vez del video. |
 
 El desenfoque no usa `filter: blur` (a 1080p hace tropezar a una Raspberry Pi): el video se dibuja en un mosaico de 96×54 px y el navegador lo escala a pantalla
@@ -63,11 +66,11 @@ Para que la Pi arranque en la vista kiosco: `~/DEACEROPLAY-lite/deploy/install-a
 
 Se ve y se usa como el **DEACERO Play anterior** (negro, tarjetas #242424, naranja, Inter y Font Awesome auto-hospedados en `public/assets/vendor/`, licencias en `LICENCIAS.txt`):
 **barra lateral** (Inicio, Buscar, Bienestar, Naturaleza; *Tu Música*: Historial, Favoritos y playlists, Para ti; *Descubrir*: 9 atajos de género que arrancan la radio continua;
-abajo *Administración*, solo con acceso; se puede contraer), **barra superior** (buscador, Apariencia, Ayuda y cuenta) y **barra de reproducción** abajo (portada, título,
+se puede contraer), **barra superior** (buscador, Apariencia, Ayuda y cuenta) y **barra de reproducción** abajo (portada, título,
 género, anterior / play / siguiente, progreso que se puede mover, Me gusta / No me gusta / playlist, volumen, letra, karaoke, visualizador, naturaleza y **Ver video**; si el navegador no deja
-sonar sin un toque, la música arranca con el primer clic que se haga en el panel). **Inicio es la radio**: subpestañas *Recomendado* (carrusel «Mira lo que la IA tiene para ti», Bienestar rápido
+sonar sin un toque, la música arranca con el primer clic que se haga en el panel). **Inicio es la radio**: subpestañas *Recomendado* («Lo más escuchado del momento»: artistas y géneros; con sesión, también «Recomendado para ti»; Bienestar rápido
 y géneros destacados), *Bienestar* y *Podcasts* (temas sugeridos y, debajo, sus episodios con portada: *Escuchar* o *Ver video*). Mientras se busca o la IA
-piensa aparece una **capa de carga grande** («Pensando…», «Buscando lo mejor para recomendarte»; se quita sola al sonar y tiene «Ocultar»). **Ver video** muestra
+piensa aparece una **capa de carga grande** («Pensando…», «Buscando lo mejor para recomendarte»; se quita sola al sonar y tiene «Ocultar»; el texto de abajo se vuelve más claro si la espera se alarga). Las listas muestran **esqueletos** (la silueta de lo que viene) en vez de un «Cargando…» seco. **Ver video** muestra
 el video (sin sonido propio, sigue al audio) de lo que suena; solo se pide mientras está abierto. En el celular (≤ 768 px) no hay barra lateral: abajo van la barra compacta y las pestañas Inicio, Bienestar, Descubrir (el menú) y Biblioteca.
 El **motor de audio** es un iframe oculto (`/?view=local&mode=audio&sid=…`) que se crea una vez: navegar no corta la música. Cada módulo pesado se descarga al abrir su vista.
 Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno nuevo, corre `node scripts/recortar-iconos.js` (la prueba `panel-iconos` lo exige).
@@ -75,6 +78,15 @@ Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno
 - **Cuenta (opcional):** se entra solo con el **número de nómina** (4–10 dígitos), sin contraseña; sin cuenta todo suena igual. La cuenta guarda Me gusta / No me gusta,
   playlists, historial, tema y gustos. **Sin cuenta**, Me gusta, historial y playlists se guardan en ese navegador (`localStorage`); al entrar, los Me gusta se pasan a la cuenta. **Las cuentas no se pueden borrar desde la app** (se pueden descargar los datos propios); el administrador las desactiva.
   Si existe `DATA_DIR/nominas-permitidas.txt` (una nómina por línea) solo esas entran; si no, entra cualquiera (el arranque lo avisa).
+- **Lo más escuchado del momento** (Inicio → Recomendado): artistas y géneros **de toda la planta**. Va primero lo que más se ha servido en los últimos 14 días
+  (`src/popularidad.js`: **solo conteos por artista y género** —sin sesión, cuenta ni IP—; un artista aparece si llegó a 3 reproducciones) y se completa con los artistas
+  que van con la hora (`/api/ia/momento`, motor local, sin Gemini). **Recomendado para ti** (solo con sesión) es lo **personal**: según lo que escuchas y tus Me gusta (`/api/ia/para-ti`).
+- **Banners con carátula y miniclip:** las tarjetas de género y artista muestran la carátula de una canción de muestra (`/api/muestra`, con caché; una a la vez para no saturar yt-dlp)
+  y, al pasar el cursor o enfocar con el teclado, un **miniclip mudo** de 5 s (sin bucle). Solo con ratón, sin «reducir movimiento» ni ahorro de datos; uno a la vez; `Esc` lo quita. En el celular, solo la carátula.
+  Los álbumes no existen en la app (todo sale de búsquedas de canciones), por eso solo hay banners de género y artista.
+- **Locutor «Estás escuchando…»:** al elegir un género, canción, viaje de Bienestar, podcast o lista, una voz en español del navegador dice qué se va a oír; llena el silencio hasta el primer sonido y,
+  si aún habla cuando la música arranca, la música entra baja y sube al terminar. Se apaga en *Apariencia → Sonido* (se recuerda en el navegador). Sin voz en español, no suena.
+- **Ver video:** además del botón de la barra, está en cada resultado de *Buscar* y en cada episodio de podcast (el video no lleva sonido propio: sigue al audio).
 - **No me gusta** de verdad: los géneros que alguien rechaza dejan de salir en *su* rotación (no en la de los demás).
 - **Para ti / IA:** recomendado ahora, hecho para ti, descubrir, artistas, podcasts y playlists. Usa **Gemini** si hay `GEMINI_KEY` (límite de 30/min y 1500/día,
   cortacircuitos) y si no, o si falla, un motor **local** con semillas (`data/seed/`). El oyente no nota la diferencia salvo en la variedad.
@@ -98,9 +110,24 @@ Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno
 - **Atajos:** espacio, `N` siguiente, `L` letra, `K` karaoke, `/` buscar, `1`–`9` secciones del menú, `?` ayuda (se pueden apagar en la ayuda).
 - No hay ecualizador ni crossfade sobre la música, por la misma razón que el visualizador.
 
-## Administración (pestaña o `/api/admin/*`)
+## Entrar desde otro sistema (`/entrar`)
 
-Con `REMOTE_TOKEN` hace falta la clave (`?t=CLAVE` una vez, o pegarla en *Apariencia*); sin `REMOTE_TOKEN`, **solo desde la propia máquina**.
+Para mandar a alguien de otro sistema a la radio **con la sesión ya iniciada**: `GET /entrar?nomina=123456&nombre=Ana%20P%C3%A9rez` (el nombre es opcional).
+El servidor abre la sesión (cookie HttpOnly), responde `302` a `/panel` **sin dejar la nómina ni el nombre en la dirección** (`Referrer-Policy: no-referrer`, `no-store`) y la persona llega ya con su cuenta.
+Valen las mismas reglas que el login (`nominas-permitidas.txt`, cuentas desactivadas, límite de intentos por IP). Si algo falla responde siempre igual (`/panel?entrada=no`, el panel avisa
+«No se pudo iniciar tu sesión desde el enlace»): no revela qué nóminas existen.
+
+**Recomendado: firmar el enlace.** Sin firma, cualquier página podría mandar a alguien a `/entrar?nomina=…` y dejarlo con la sesión de otra persona en este navegador (el login normal no tiene ese riesgo
+porque exige el mismo origen). Con `ENTRADA_SECRETO` el enlace debe traer `ts` (hora en segundos o milisegundos, ±5 min) y `firma` = HMAC-SHA256 en hexadecimal de `nómina|nombre|ts` con ese secreto
+(`nombre` vacío si no se manda; `ts` tal cual va en la URL). Ejemplo en Node: `crypto.createHmac('sha256', SECRETO).update(\`${nomina}|${nombre}|${ts}\`).digest('hex')`.
+Las direcciones quedan en bitácoras de proxies y del navegador: el secreto y la ventana corta limitan lo que se pueda reutilizar.
+**En producción, define `ENTRADA_SECRETO`** (16 caracteres o más; el arranque avisa en *Diagnóstico* si falta o es corto). La vigencia de la firma usa la hora corregida por la red (la Pi puede tener el reloj atrasado). Sin firma, además: solo se acepta una navegación de la persona (no `<img>`, `<iframe>` ni `fetch`) y el nombre solo se usa al **crear** la cuenta (un enlace sin firmar no renombra la de otra persona).
+
+## Administración (`/admin` y `/api/admin/*`)
+
+Es una **página aparte** (`/admin`), ya no una pestaña del panel (un `#admin` viejo redirige allá). Pide la **misma clave que `/remote`** (`REMOTE_TOKEN`): se escribe en la página, o llega con `?t=CLAVE`
+**Intentos de clave:** tras 15 intentos con clave **incorrecta** en 15 min, esa IP recibe `429` (aun con la correcta) hasta que pase la ventana; sin clave no se gasta el cupo. «Olvidar clave» borra también la que `/remote` guardó en este navegador.
+una vez, o se reutiliza la que `/remote` ya guardó en el navegador; se guarda solo en la pestaña. Sin `REMOTE_TOKEN`, **solo desde la propia máquina** (entra sin clave). El panel de música solo trae un enlace en *Apariencia*.
 Todo afecta a las **pantallas** (`/` y `/kiosco`), nunca a quien escucha en el panel.
 
 - **Horario:** *rotación* (como siempre), *horario* (bloques por días y franja con sus géneros; fuera de los bloques, rotación normal) o *musicoterapia 24/7*

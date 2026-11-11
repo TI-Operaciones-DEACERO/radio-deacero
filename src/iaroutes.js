@@ -32,6 +32,7 @@ function createIaRoutes({ ia, library, clock = Date.now, json, max = 30, geminiM
     const sid = q.get('sid') || undefined;
     try {
       if (p === '/api/ia/ahora') return json(res, 200, await ia.ahora({ taste, hour, recientes: idList(q.get('recientes')) }));
+      if (p === '/api/ia/momento') return json(res, 200, await ia.momento({ taste, hour, recientes: idList(q.get('recientes')) }));
       if (p === '/api/ia/podcasts') return json(res, 200, await ia.podcasts({ hour }));
       if (p === '/api/ia/artistas') {
         const genero = q.get('genero') || '';

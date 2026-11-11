@@ -345,7 +345,17 @@ function createRadio({
     return pool.map((t) => t.id);
   }
 
-  return { next, startViaje, stopViaje, viajeInfo, calentar, sessionCount: () => sessions.size };
+  /* Una canción cualquiera del pool del género (sin consumirla) para adornar su banner. Prefiere una ya resuelta. */
+  async function muestra(genreId) {
+    const ids = await calentar(genreId, 1);
+    const pool = pools.get(genreId) || [];
+    /* Prefiere una ya resuelta y corta; si el género solo trae mezclas largas (lofi, jazz…) sirve una de esas: el miniclip arranca a ~30 s. */
+    const corta = (x) => !(x.duration > SONG_MAX_SEC);
+    const t = pool.find((x) => !isBad(x.id) && listo(x.id) && corta(x)) || pool.find((x) => !isBad(x.id) && corta(x)) || pool.find((x) => !isBad(x.id)) || null;
+    return ids.length && t ? { id: t.id, title: t.title, channel: t.channel, duration: t.duration } : null;
+  }
+
+  return { next, startViaje, stopViaje, viajeInfo, calentar, muestra, sessionCount: () => sessions.size };
 }
 
 module.exports = { createRadio };

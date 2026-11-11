@@ -15,6 +15,7 @@
         h('div', { class: 'fila-info' }, [h('span', { class: 'fila-t', text: t.title }), h('span', { class: 'fila-s', text: (t.channel || '') + dur(t) })]),
         h('div', { class: 'fila-acc' }, [
           h('button', { type: 'button', class: 'ico ghost-ico', 'data-f': 'play', 'aria-label': 'Reproducir ' + t.title, title: 'Reproducir', onclick: () => tocar(t) }, P.icono('play', 22)),
+          h('button', { type: 'button', class: 'ico ghost-ico', 'data-f': 'video', 'aria-label': 'Ver video: ' + t.title, title: 'Ver video', onclick: () => tocar(t, true) }, P.fa('fa-tv')),
           h('button', { type: 'button', class: 'ico ghost-ico', 'data-f': 'like', 'aria-pressed': String(r === 'like'), 'aria-label': 'Me gusta: ' + t.title, title: 'Me gusta', onclick: () => P.reacciones.alternar(t, 'like') }, P.emo(h('span'), '👍')),
           h('button', { type: 'button', class: 'ico ghost-ico', 'aria-haspopup': 'dialog', 'aria-label': 'Agregar a una playlist: ' + t.title, title: 'Agregar a una playlist', onclick: () => P.selectorPlaylist(t) }, P.icono('plus', 22))
         ])
@@ -22,9 +23,11 @@
     }));
   }
 
-  async function tocar(t) {
+  async function tocar(t, video) {
     P.cargando('Preparando «' + t.title + '»', 'Después siguen canciones parecidas.');
-    if (!(await P.send({ cmd: 'track', kind: 'search', track: t }))) P.finCarga();
+    P.anunciarEscucha('cancion', t.title);
+    if (!(await P.send({ cmd: 'track', kind: 'search', track: t }))) { P.finCarga(); return; }
+    if (video) { P.finCarga(); P.abrirVideo(); } /* el video (sin sonido) sigue al audio, como en los podcasts; sin la capa de carga encima */
   }
 
   async function buscar() {
@@ -37,6 +40,7 @@
     lista.setAttribute('aria-busy', 'true');
     estadoEl.hidden = false;
     estadoEl.textContent = 'Buscando «' + q + '»…';
+    lista.replaceChildren(...P.esqueleto('fila', 4));
     const r = await P.api.buscar(P.sid(), q);
     if (yo !== pedido) return; /* llegó tarde: ya se buscó otra cosa */
     boton.disabled = false;

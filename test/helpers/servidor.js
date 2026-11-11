@@ -22,6 +22,7 @@ function setup(over = {}) {
   fs.writeFileSync(path.join(publicDir, 'index.html'), '<h1>hola</h1>');
   fs.writeFileSync(path.join(publicDir, 'remote.html'), '<h1>control</h1>');
   fs.writeFileSync(path.join(publicDir, 'panel-completo.html'), '<h1>completo</h1>');
+  fs.writeFileSync(path.join(publicDir, 'admin.html'), '<h1>admin</h1>');
   const now = { t: 1_800_000_000_000 };
   const users = createUsers({ dir, now: () => now.t });
   const sessions = createSessions({ dir, now: () => now.t });

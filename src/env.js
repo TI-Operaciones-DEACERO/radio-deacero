@@ -25,7 +25,7 @@ function parseEnv(texto) {
 /* Lo único que puede venir de DATA_DIR/.env. Esa carpeta la puede escribir más gente que la de la app (en Windows instalado
  * por un administrador, el grupo Usuarios): nada que decida QUÉ se ejecuta (YTDLP_BIN, YTDLP_EXTRA, PATH, NODE_OPTIONS, PYTHONPATH...)
  * ni dónde están los datos o por dónde escucha (DATA_DIR, HOST, PORT): eso va en el entorno o en el .env de la app. */
-const ENV_DATOS = new Set(['GEMINI_KEY', 'GEMINI_MODEL', 'REMOTE_TOKEN', 'HOSTS_PERMITIDOS', 'PANEL_V2', 'PANEL_PRINCIPAL', 'PANEL_PUBLICO', 'COOKIE_SECURE']);
+const ENV_DATOS = new Set(['GEMINI_KEY', 'GEMINI_MODEL', 'REMOTE_TOKEN', 'HOSTS_PERMITIDOS', 'PANEL_V2', 'PANEL_PRINCIPAL', 'PANEL_PUBLICO', 'COOKIE_SECURE', 'ENTRADA_SECRETO']);
 
 /* Carga `file` en `env` (por defecto process.env) sin pisar lo ya definido. Devuelve SOLO los nombres cargados, nunca los valores.
  * permitidas (Set): si se da, lo demás se ignora y se devuelve en `ignoradas` (solo nombres). */

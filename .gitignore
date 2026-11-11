@@ -24,3 +24,7 @@ Thumbs.db
 vendor/
 # ...salvo las fuentes e iconos del panel (Inter y Font Awesome), que sí son parte de la app
 !public/assets/vendor/
+
+# datos del equipo de desarrollo (destinos, usuarios, accesos): solo en este PC, nunca en el repo
+CLAUDE.local.md
+.local/

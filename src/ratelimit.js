@@ -19,7 +19,14 @@ function createLimiter({ max, windowMs, now = Date.now, maxKeys = 5000 }) {
     return { ok: true };
   }
 
-  return { hit, size: () => hits.size };
+  /* Mira sin contar: ¿esta clave ya llegó al tope? */
+  function peek(key) {
+    const t = now();
+    const list = (hits.get(key) || []).filter((x) => t - x < windowMs);
+    return list.length >= max ? { ok: false, retryAfter: Math.max(1, Math.ceil((list[0] + windowMs - t) / 1000)) } : { ok: true };
+  }
+
+  return { hit, peek, size: () => hits.size };
 }
 
 module.exports = { createLimiter };

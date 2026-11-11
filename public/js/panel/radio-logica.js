@@ -33,6 +33,17 @@
   /* El color de un género va a una variable CSS: solo hexadecimal. */
   const colorSeguro = (c) => (typeof c === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(c) ? c : '');
 
+  /* Mezcla dos listas (artistas y géneros) para un carrusel: de a `cada` de la primera, uno de la segunda, y lo que sobre al final. */
+  function intercalar(a, b, cada) {
+    const xs = Array.isArray(a) ? a.slice() : [], ys = Array.isArray(b) ? b.slice() : [];
+    const n = Math.max(1, Math.floor(cada) || 2), out = [];
+    while (xs.length || ys.length) {
+      for (let i = 0; i < n && xs.length; i++) out.push(xs.shift());
+      if (ys.length) out.push(ys.shift());
+    }
+    return out;
+  }
+
   /* Géneros internos del motor: no son «la radio de un género». */
   const NO_GENERO = ['search', 'podcast', 'lista'];
   const generoSonando = (s) => (s && s.genre && typeof s.genre.id === 'string' && !NO_GENERO.includes(s.genre.id) ? s.genre.id : '');
@@ -93,18 +104,17 @@
   const DESTINOS = {
     inicio: ['inicio', 'reco'], bienestar: ['inicio', 'bienestar'], podcasts: ['inicio', 'podcasts'],
     buscar: ['buscar', ''], naturaleza: ['naturaleza', ''], parati: ['parati', ''],
-    favoritos: ['favoritos', 'likes'], historial: ['favoritos', 'historial'], admin: ['admin', '']
+    favoritos: ['favoritos', 'likes'], historial: ['favoritos', 'historial']
   };
   function destino(vista) {
     const v = typeof vista === 'string' && tiene(DESTINOS, vista) ? vista : 'inicio';
     return { vista: v, panel: DESTINOS[v][0], sub: DESTINOS[v][1] };
   }
   /* Orden del menú lateral: también el de los atajos 1–9. */
-  const MENU = ['inicio', 'buscar', 'bienestar', 'naturaleza', 'historial', 'favoritos', 'parati', 'admin'];
-  function vistaDeAtajo(n, adminVisible) {
-    const lista = MENU.filter((v) => v !== 'admin' || adminVisible);
+  const MENU = ['inicio', 'buscar', 'bienestar', 'naturaleza', 'historial', 'favoritos', 'parati'];
+  function vistaDeAtajo(n) {
     const i = Number(n) - 1;
-    return Number.isInteger(i) && i >= 0 && i < lista.length ? lista[i] : null;
+    return Number.isInteger(i) && i >= 0 && i < MENU.length ? MENU[i] : null;
   }
   /* Pestañas de abajo en el celular: Inicio, Bienestar, Descubrir (el menú) y Biblioteca. */
   function pestanaMovil(vista) {
@@ -159,7 +169,7 @@
 
   const api = {
     textoAnuncio, escribiendo, altoBarra,
-    DESCUBRIR, DESTACADOS, generosDestacados, colorSeguro, generoSonando,
+    DESCUBRIR, DESTACADOS, generosDestacados, colorSeguro, generoSonando, intercalar,
     fmtTiempo, progreso, segundosDesde, iconoVolumen, valorConTecla, textoVolumen,
     CARACTERES, etiquetaCaracter, cargaTermina, cargaSola,
     destino, MENU, vistaDeAtajo, pestanaMovil

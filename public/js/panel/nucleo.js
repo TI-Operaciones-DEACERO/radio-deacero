@@ -4,7 +4,7 @@
    La lógica sin DOM vive en logica.js y radio-logica.js. */
 (function () {
   'use strict';
-  const L = window.PanelLogica, R = window.PanelRadio, A = window.PlayApi;
+  const L = window.PanelLogica, R = window.PanelRadio, LO = window.PanelLocutor, A = window.PlayApi;
   const $ = (id) => document.getElementById(id);
   const bus = new EventTarget();
 
@@ -73,6 +73,16 @@
     toastTimer = setTimeout(() => { t.classList.remove('show'); t.textContent = ''; }, ms || 4000);
   }
 
+  /* — esqueleto: en vez de un «Cargando…» seco, la silueta de lo que va a aparecer (tarjeta, género, chip, fila). El texto «Cargando…» queda
+       solo para lectores de pantalla. Sin blur ni sombras animadas: la Pi no lo aguanta (es un pulso de opacidad, y con «reducir movimiento» queda quieto). — */
+  function esqueleto(tipo, n, etiqueta) {
+    const tag = etiqueta || 'li';
+    const out = [];
+    for (let i = 0; i < (n || 4); i++) out.push(h(tag, { class: 'esq esq-' + tipo, 'aria-hidden': 'true' }));
+    out.push(h(tag, { class: 'sr-only', text: 'Cargando…' })); /* sin role=status: el contenedor ya lleva aria-busy y un li con rol rompe la lista */
+    return out;
+  }
+
   /* — cargando: capa grande mientras se busca o piensa la IA (sustituye a los avisos «Buscando…», «Iniciando…», «Reproduciendo…») — */
   let carga = null;
   const anunciar = (txt) => { const el = $('srAhora'); el.textContent = R.textoAnuncio(el.textContent, txt); };
@@ -85,24 +95,33 @@
   function mostrarCarga(txt, sub, opc) {
     medirBarra();
     const s = estado;
-    carga = { t0: Date.now(), id: s && s.track ? s.track.id : '', vioCarga: false, ia: !!(opc && opc.ia) };
+    carga = { t0: Date.now(), id: s && s.track ? s.track.id : '', vioCarga: false, ia: !!(opc && opc.ia), sub: sub || '', vuelta: document.activeElement };
     $('carga').hidden = false;
     $('cargaTxt').textContent = txt;
-    $('cargaSub').textContent = sub || '';
+    /* La capa tapa el contenido: si el foco (teclado) estaba debajo, pasa a «Ocultar» para no quedar invisible; finCarga lo devuelve. */
+    if (carga.vuelta && ($('contenido').contains(carga.vuelta) || $('sidebar').contains(carga.vuelta))) $('cargaOcultar').focus({ preventScroll: true });
+    pintarEspera();
+    clearInterval(esperaTimer);
+    esperaTimer = setInterval(pintarEspera, 1000);
     anunciar(txt);
   }
+  /* El texto de abajo se vuelve más claro mientras se espera (ver PanelLocutor.mensajeEspera): nadie se queda mirando un giro sin saber qué pasa. */
+  let esperaTimer = 0;
+  function pintarEspera() { if (carga) $('cargaSub').textContent = LO.mensajeEspera(carga.sub, (Date.now() - carga.t0) / 1000); }
   /* La IA ya respondió: ahora se espera la música (misma capa, otro texto). */
-  function cargandoMusica(txt, sub) { if (!carga) return mostrarCarga(txt, sub); carga.ia = false; carga.t0 = Date.now(); $('cargaTxt').textContent = txt; $('cargaSub').textContent = sub || ''; anunciar(txt); }
+  function cargandoMusica(txt, sub) { if (!carga) return mostrarCarga(txt, sub); carga.ia = false; carga.t0 = Date.now(); carga.sub = sub || ''; $('cargaTxt').textContent = txt; pintarEspera(); anunciar(txt); }
   /* La capa también sale sola cuando el motor busca tras un Siguiente/Anterior (cola vacía): ver PanelRadio.cargaSola.
      sola = { desde: cuándo empezó a buscar el motor, pedido: último Siguiente/Anterior, descartada: ya se quitó en esta búsqueda } */
   const sola = { desde: 0, pedido: 0, descartada: false };
   function finCarga() {
     if (!carga) return;
     const tenia = $('carga').contains(document.activeElement);
+    const vuelta = carga.vuelta;
     carga = null;
+    clearInterval(esperaTimer);
     sola.descartada = true; /* «Ocultar» o el tope de 90 s: no vuelve a salir sola mientras siga ESTA búsqueda */
     $('carga').hidden = true;
-    if (tenia) $('vista').focus();
+    if (tenia) { if (vuelta && vuelta.isConnected && vuelta.focus && !vuelta.closest('[hidden]')) vuelta.focus({ preventScroll: true }); else $('vista').focus(); }
   }
   function revisarCarga(s) {
     const cargando = !!(s && s.loading);
@@ -115,6 +134,7 @@
     if (R.cargaTermina(carga, s, Date.now())) finCarga();
   }
   $('cargaOcultar').addEventListener('click', finCarga);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && carga && !document.querySelector('dialog[open]') && !e.defaultPrevented) { e.preventDefault(); finCarga(); } }); /* Esc oculta la capa (WCAG 2.1.1 / 2.2.2) */
 
   /* — visor de video: el video (sin sonido) de lo que suena, siguiendo al audio del motor. Solo se pide mientras está abierto. — */
   const visor = $('visor'), vv = $('visorVideo');
@@ -151,6 +171,41 @@
   $('bVideo').addEventListener('click', () => { if (visor.hidden) abrirVideo(); else cerrarVideo(true); });
   $('visorCerrar').addEventListener('click', () => cerrarVideo(true));
   visor.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); cerrarVideo(true); } });
+
+  /* — locutor «Estás escuchando …»: al elegir música una voz (la del navegador, en español) dice qué se va a oír. Llena el silencio entre el toque y
+       el primer sonido; en cuanto la música suena la voz sigue, pero con la música baja (no se pisan). Se apaga en Apariencia → Sonido. — */
+  const LS_LOCUTOR = 'pl_locutor';
+  let locutorOn = store.get(LS_LOCUTOR) !== '0';
+  const loc = { habla: false, pend: null, seguro: 0 };
+  if ('speechSynthesis' in window) speechSynthesis.getVoices(); /* las voces cargan en segundo plano */
+  const vozEspanol = () => ('speechSynthesis' in window ? LO.elegirVoz(speechSynthesis.getVoices()) : null);
+  function duck(habla) { const p = player(); if (p && p.duck) { try { p.duck(LO.nivelDuck(habla)); } catch (_) { /* motor cargando */ } } }
+  function finVoz() { clearTimeout(loc.seguro); if (!loc.habla) return; loc.habla = false; duck(false); }
+  /* tipo: genero | cancion | bienestar | podcast | lista. Se llama DENTRO del toque de la persona (si no, el navegador no deja hablar). */
+  function anunciarEscucha(tipo, nombre) {
+    if (!LO.debeHablar({ activo: locutorOn, silenciado: !!(estado && estado.muted), volumen: Number(vol.value) })) return;
+    const texto = LO.frase(tipo, nombre), voz = vozEspanol();
+    if (!texto || !voz) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(texto);
+      u.voice = voz; u.lang = voz.lang; u.rate = 0.95; u.volume = LO.volumenVoz(vol.value);
+      u.onend = u.onerror = finVoz;
+      loc.habla = true;
+      loc.pend = { id: estado && estado.track ? estado.track.id : '' };
+      duck(true); /* si aún suena lo anterior, baja mientras se habla */
+      clearTimeout(loc.seguro);
+      loc.seguro = setTimeout(finVoz, 12000); /* por si el navegador nunca avisa que terminó */
+      speechSynthesis.speak(u);
+    } catch (_) { finVoz(); }
+  }
+  /* El primer momento en que SUENA lo nuevo: si la voz aún habla, la música arranca baja (y sube al terminar). */
+  function revisarLocutor(s) {
+    if (loc.habla && s && s.muted) { try { speechSynthesis.cancel(); } catch (_) { /* sin voz */ } finVoz(); } /* la persona silenció: la voz también calla */
+    if (!loc.pend || !LO.primerSonido(loc.pend.id, s)) return;
+    loc.pend = null;
+    if (loc.habla) duck(true);
+  }
 
   /* — sesión del oyente: por pestaña (sessionStorage 'pl_sid', la misma que usa /panel/simple); el servidor lleva aparte su racha — */
   let sidLocal = '';
@@ -218,6 +273,7 @@
     renderProgreso(s);
     marcarSonando(s);
     revisarCarga(s);
+    revisarLocutor(s);
     seguirVideo(s);
     const id = s && s.track ? s.track.id : '';
     if (id !== ultimoId) { ultimoId = id; bus.dispatchEvent(new CustomEvent('track', { detail: s })); }
@@ -512,7 +568,7 @@
 
   /* — scripts bajo demanda (CSP 'self': <script src> dinámico del mismo origen). Cada archivo se pide UNA vez. — */
   const DEPS = { /* lógica pura que necesita cada módulo antes de cargarse */
-    buscar: ['escucha-logica'], naturaleza: ['escucha-logica'], letras: ['escucha-logica'], visualizador: ['escucha-logica'], admin: ['admin-logica']
+    buscar: ['escucha-logica'], naturaleza: ['escucha-logica'], letras: ['escucha-logica'], visualizador: ['escucha-logica']
   };
   const scripts = {};
   function cargarScript(nombre) {
@@ -570,8 +626,7 @@
   function cuandoCargue(nombre, fn) { if (cargadas[nombre]) fn(cargadas[nombre]); else (alCargar[nombre] = alCargar[nombre] || []).push(fn); }
 
   /* ─────────────── navegación: barra lateral, subpestañas de Inicio y pestañas de abajo (celular) ─────────────── */
-  const PANELES = ['inicio', 'buscar', 'parati', 'favoritos', 'naturaleza', 'admin'];
-  const tabAdmin = $('tab-admin');
+  const PANELES = ['inicio', 'buscar', 'parati', 'favoritos', 'naturaleza'];
   let activa = 'inicio', panelActivo = 'inicio', subInicio = 'reco';
 
   /* Subpestañas de Inicio (Recomendado, Bienestar, Podcasts). Elegir una es navegar: actualiza menú y dirección. */
@@ -602,7 +657,6 @@
   }
 
   function ir(vista, opciones) {
-    if (vista === 'admin' && tabAdmin.hidden) vista = 'inicio';
     const d = R.destino(vista);
     activa = d.vista; panelActivo = d.panel;
     for (const n of PANELES) $('p-' + n).hidden = n !== d.panel;
@@ -626,6 +680,7 @@
   /* Descubrir: cada atajo arranca la radio continua de su género. */
   function radioGenero(id, label) {
     mostrarCarga('Preparando ' + label, 'Buscando canciones que sí se pueden reproducir…');
+    anunciarEscucha('genero', label);
     return send({ cmd: 'genre', id });
   }
   $('descubrir').replaceChildren(...R.DESCUBRIR.map((d) => {
@@ -720,20 +775,20 @@
     buscarArriba(q);
   });
 
-  /* ─────────────── Administración: el botón solo aparece si el servidor dice que hay acceso ─────────────── */
+  /* Administración ya no vive aquí: es la página /admin (pide la misma clave que /remote). Un marcador viejo (#admin) lleva allá. */
   const inicial = location.hash.replace('#', '');
-  async function revisarAdmin(avisar) {
-    const r = await A.adminEstado();
-    const ok = r.ok;
-    tabAdmin.hidden = !ok;
-    $('claveOlvidar').hidden = !A.clave.hay();
-    if (!ok && activa === 'admin') ir('inicio');
-    if (ok && (inicial === 'admin' || avisar) && activa !== 'admin') ir('admin');
-    if (avisar) toast(ok ? 'Listo: ya tienes la sección Administración.' : 'Sin acceso a Administración.');
-    return r;
-  }
+  if (inicial === 'admin') { location.replace('/admin'); return; }
+  /* Si otro sistema mandó a la persona con /entrar y no se pudo iniciar su sesión (el servidor no dice por qué): se avisa y se limpia la dirección. */
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.get('entrada') === 'no') {
+      u.searchParams.delete('entrada');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+      setTimeout(() => toastError('No se pudo iniciar tu sesión desde el enlace. Entra con tu número de nómina.'), 600);
+    }
+  } catch (_) { /* sin URL/history */ }
 
-  /* ─────────────── Apariencia (tema) y clave de administración ─────────────── */
+  /* ─────────────── Apariencia (tema y sonido) ─────────────── */
   const T = window.PanelTemas;
   const dlgAp = $('apariencia');
   function pintarTemas() {
@@ -752,38 +807,24 @@
     if (guardarEnCuenta && user) A.guardarPrefs({ tema: t }).then((r) => { if (!r.ok && r.status !== 401) toastError('El tema se guardó solo en este navegador.'); });
     emit('tema', t);
   }
+  function pintarSonido() {
+    $('locutorOn').checked = locutorOn;
+    $('locutorNota').textContent = ('speechSynthesis' in window && vozEspanol() ? 'Usa la voz en español de tu navegador. ' : 'Tu navegador no tiene una voz en español: el locutor no sonará. ') + 'Calla si silencias la música. Si usas un lector de pantalla, puede convenir apagarlo.';
+  }
+  $('locutorOn').addEventListener('change', () => {
+    locutorOn = $('locutorOn').checked;
+    if (locutorOn) store.del(LS_LOCUTOR); else { store.set(LS_LOCUTOR, '0'); try { speechSynthesis.cancel(); } catch (_) { /* sin voz */ } finVoz(); }
+    toast(locutorOn ? 'Locutor activado.' : 'Locutor desactivado.');
+  });
   $('aparienciaBtn').addEventListener('click', () => {
     pintarTemas();
-    errorCampo($('claveIn'), $('claveErr'), '');
-    $('claveOlvidar').hidden = !A.clave.hay();
+    pintarSonido();
     dlgAp.showModal();
     const sel = dlgAp.querySelector('input[name="tema"]:checked');
     if (sel) sel.focus();
   });
   dlgAp.addEventListener('close', () => $('aparienciaBtn').focus());
   $('apCerrar').addEventListener('click', () => dlgAp.close());
-  $('claveForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const v = $('claveIn').value.trim();
-    if (!v) return errorCampo($('claveIn'), $('claveErr'), 'Pega la clave de administración.');
-    A.clave.poner(v);
-    const r = await revisarAdmin(false);
-    if (!r.ok) {
-      A.clave.olvidar();
-      $('claveOlvidar').hidden = true;
-      return errorCampo($('claveIn'), $('claveErr'), r.status === 0 ? L.mensajeError(0) : 'La clave no es correcta.');
-    }
-    $('claveIn').value = '';
-    dlgAp.close();
-    ir('admin');
-    tabAdmin.focus();
-    toast('Listo: ya tienes la sección Administración.');
-  });
-  $('claveOlvidar').addEventListener('click', async () => {
-    A.clave.olvidar();
-    await revisarAdmin(false);
-    toast(tabAdmin.hidden ? 'Clave olvidada en este navegador.' : 'Clave olvidada. Desde este equipo sigues teniendo acceso.');
-  });
   /* Con cuenta: el tema guardado en la cuenta manda (si es válido). */
   on('usuario', async (u) => {
     if (!u) return;
@@ -845,14 +886,14 @@
     } else if (accion === 'buscar') enfocarBuscar();
     else if (accion === 'ayuda') abrirAyuda();
     else if (accion.indexOf('pestana:') === 0) {
-      const v = R.vistaDeAtajo(Number(accion.slice(8)), !tabAdmin.hidden);
+      const v = R.vistaDeAtajo(Number(accion.slice(8)));
       if (v) irConFoco(v);
     }
   });
 
   /* Para las vistas */
   window.Panel = {
-    h, emo, icono, fa, errorCampo, toast, toastError, store, tablist, vistas, modulos, L, R, api: A,
+    h, emo, icono, fa, esqueleto, anunciarEscucha, errorCampo, toast, toastError, store, tablist, vistas, modulos, L, R, api: A,
     sid, player, send, on, emit, ir, cuandoCargue, radioGenero, cargando: mostrarCarga, cargandoMusica, finCarga, abrirVideo,
     remarcarSonando: () => { generoMarcado = null; marcarSonando(estado); },
     estado: () => estado,
@@ -862,13 +903,11 @@
     abrir: abrirModulo,
     abrirCuenta: () => { if (window.PlayCuenta) window.PlayCuenta.abrir(); },
     reacciones: { mapa: () => mapa, de: (id) => L.reactionOf(mapa, id), alternar: reaccionar, lista: (r) => L.listByReaction(mapa, r) },
-    selectorPlaylist: abrirSelector,
-    revisarAdmin
+    selectorPlaylist: abrirSelector
   };
 
-  /* Primera sección: la de la dirección (#bienestar, #buscar…); Administración espera a saber si hay acceso. */
-  ir(inicial && inicial !== 'admin' ? inicial : 'inicio');
-  revisarAdmin(false);
+  /* Primera sección: la de la dirección (#bienestar, #buscar…). */
+  ir(inicial || 'inicio');
   /* Si cambia el # a mano o con un marcador (la navegación propia usa replaceState y no dispara este evento). */
   window.addEventListener('hashchange', () => { const v = location.hash.replace('#', ''); if (R.destino(v).vista !== activa) ir(v); });
   tick();

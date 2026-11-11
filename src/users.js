@@ -50,7 +50,8 @@ function createUsers({ dir, now = Date.now, max = 5000 }) {
 
   const view = (u) => ({ id: u.id, nomina: u.nomina, nombre: u.nombre, creado: u.creado, ultimo: u.ultimo, estado: u.estado });
 
-  function entrar(rawNomina, rawNombre) {
+  /* soloNombreNuevo: el nombre solo se usa al CREAR la cuenta (un enlace sin firmar no debe renombrar la de otra persona). */
+  function entrar(rawNomina, rawNombre, { soloNombreNuevo = false } = {}) {
     const nomina = normalizeNomina(rawNomina);
     if (!nomina) return { ok: false, error: 'NOMINA_INVALIDA' };
     const list = allowed();
@@ -59,7 +60,7 @@ function createUsers({ dir, now = Date.now, max = 5000 }) {
     let u = byNomina().get(nomina);
     if (u) {
       if (u.estado !== 'activo') return { ok: false, error: 'DESACTIVADA' };
-      if (nombre) u.nombre = nombre;
+      if (nombre && !soloNombreNuevo) u.nombre = nombre;
       u.ultimo = now();
       save();
       return { ok: true, nuevo: false, user: view(u) };

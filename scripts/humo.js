@@ -65,7 +65,7 @@ function buscarNavegador() {
     if (!(await esperar(base))) { mal('el servidor no arrancó:\n' + salida); return; }
     ok('servidor arriba');
 
-    const paginas = ['/', '/kiosco', '/remote', '/panel', '/panel/simple', '/panel/completo'];
+    const paginas = ['/', '/kiosco', '/remote', '/panel', '/panel/simple', '/panel/completo', '/admin'];
     for (const p of paginas) {
       const r = await fetch(base + p);
       const html = await r.text();
@@ -111,6 +111,12 @@ function buscarNavegador() {
         if (!/id="tabs"/.test(dom)) mal('el navegador no pintó el panel (¿falló JavaScript?)');
         else if (errores.length) mal('errores de JavaScript/CSP en el panel:\n    ' + errores.slice(0, 10).join('\n    '));
         else ok('panel completo en navegador sin errores de JavaScript');
+        /* /admin: desde la propia máquina entra sin clave y monta Administración (sus pestañas) */
+        const ra = spawnSync(nav, ['--headless=new', '--disable-gpu', '--no-first-run', '--mute-audio', `--user-data-dir=${perfil}`, '--enable-logging=stderr', '--v=0', '--virtual-time-budget=6000', '--dump-dom', base + '/admin'], { encoding: 'utf8', timeout: 60000 });
+        const errAdmin = (ra.stderr || '').split('\n').filter((l) => /CONSOLE.*(Uncaught|Error)|Refused to/i.test(l));
+        if (!/id="at-horario"/.test(ra.stdout || '')) mal('el navegador no montó /admin (¿falló JavaScript?)');
+        else if (errAdmin.length) mal('errores de JavaScript/CSP en /admin:\n    ' + errAdmin.slice(0, 10).join('\n    '));
+        else ok('/admin en navegador sin errores de JavaScript');
       }
     }
   } finally {

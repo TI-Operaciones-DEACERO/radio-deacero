@@ -60,7 +60,7 @@
     if (!lista.length) {
       partes.push(h('p', { class: 'hint', text: 'Todavía no tienes Me gusta. Mientras suena una canción, toca el pulgar hacia arriba de la barra de abajo.' }));
     } else {
-      partes.push(h('div', { class: 'row izq' }, [h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando tus Me gusta'); P.send(L.queueFromTracks(lista)); } })]));
+      partes.push(h('div', { class: 'row izq' }, [h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando tus Me gusta'); P.anunciarEscucha('lista', 'tus Me gusta'); P.send(L.queueFromTracks(lista)); } })]));
       partes.push(h('ul', { class: 'filas' }, lista.map((t) => fila(t, [
         btnPlay(t, () => P.send(L.queueFromTracks(lista, t.id))),
         btnTexto('Quitar', 'Quitar de Me gusta: ' + t.title, () => P.reacciones.alternar(t, 'like'))
@@ -74,7 +74,7 @@
   async function pintarPlaylistsInt() {
     if (abierta) return pintarDetalle(abierta);
     els.playlists.setAttribute('aria-busy', 'true');
-    els.playlists.replaceChildren(h('p', { class: 'cargando', text: 'Cargando tus playlists…' }));
+    els.playlists.replaceChildren(...P.esqueleto('fila', 3, 'div'));
     const r = await A.playlists();
     els.playlists.removeAttribute('aria-busy');
     if (abierta) return;
@@ -108,7 +108,7 @@
   async function pintarDetalle(id) { const v = foco(els.playlists); await pintarDetalleInt(id); v(); }
   async function pintarDetalleInt(id) {
     els.playlists.setAttribute('aria-busy', 'true');
-    els.playlists.replaceChildren(h('p', { class: 'cargando', text: 'Cargando la playlist…' }));
+    els.playlists.replaceChildren(...P.esqueleto('fila', 3, 'div'));
     const r = await A.playlist(id);
     els.playlists.removeAttribute('aria-busy');
     if (abierta !== id) return;
@@ -134,7 +134,7 @@
       h('button', { type: 'button', class: 'link', text: '‹ Mis playlists', onclick: () => { abierta = null; pintarPlaylists(); } }),
       h('div', { class: 'sub-cab' }, [h('h2', { text: pl.name }), h('span', { class: 'contador', text: cuentaTxt(tracks.length) })]),
       h('div', { class: 'row izq' }, [
-        tracks.length ? h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando «' + pl.name + '»'); P.send(L.queueFromTracks(tracks)); } }) : null,
+        tracks.length ? h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando «' + pl.name + '»'); P.anunciarEscucha('lista', pl.name); P.send(L.queueFromTracks(tracks)); } }) : null,
         h('button', { type: 'button', class: 'ghost danger-b', text: 'Borrar playlist', onclick: async () => {
           if (!window.confirm('¿Borrar la playlist «' + pl.name + '»? Esto no se puede deshacer.')) return;
           const x = await A.borrarPlaylist(id);
@@ -164,7 +164,7 @@
   async function pintarHistorial() { const v = foco(els.historial); await pintarHistorialInt(); avisoLocal(els.historial); v(); }
   async function pintarHistorialInt() {
     els.historial.setAttribute('aria-busy', 'true');
-    els.historial.replaceChildren(h('p', { class: 'cargando', text: 'Cargando tu historial…' }));
+    els.historial.replaceChildren(...P.esqueleto('fila', 3, 'div'));
     const r = await A.historial(100);
     els.historial.removeAttribute('aria-busy');
     if (!r.ok) { els.historial.replaceChildren(errorCon(r, pintarHistorial)); return; }

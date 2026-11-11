@@ -1,5 +1,5 @@
 /* inicio.js — portada «Radio» (Inicio) del panel completo, como la del DEACERO Play anterior:
-   Recomendado = carrusel «Mira lo que la IA tiene para ti» (/api/ia/ahora), «Bienestar rápido» (ánimos que llevan a Bienestar y arrancan
+   Recomendado = «Lo más escuchado del momento» (artistas y géneros; /api/ia/momento), «Recomendado para ti» (solo con cuenta: /api/ia/para-ti), «Bienestar rápido» (ánimos que llevan a Bienestar y arrancan
    el viaje) y una cuadrícula de géneros destacados que arranca su radio continua; Podcasts = carrusel de /api/ia/podcasts.
    Todo lo que llega del servidor se pinta con textContent (Panel.h). Se carga con la página: es la primera vista. */
 (function () {
@@ -26,8 +26,9 @@
     return revisar;
   }
 
-  /* Tarjeta del carrusel: color del género, emoji grande, título y razón. Es un botón; el texto completo se lee (no se corta). */
-  function tarjeta({ emoji, color, titulo, sup, texto, aria, alClic }) {
+  /* Tarjeta del carrusel: color del género, emoji grande (o la carátula de una muestra), título y razón. Es un botón; el texto completo se lee (no se corta).
+     muestra = { tipo: 'genero'|'artista', clave } → banner con carátula y miniclip (portadas.js). */
+  function tarjeta({ emoji, color, titulo, sup, texto, aria, alClic, muestra }) {
     const e = h('span', { class: 'aireco-emoji', 'aria-hidden': 'true' });
     P.emo(e, emoji || '🎵');
     const b = h('button', { type: 'button', class: 'aireco-card', 'aria-label': aria, onclick: alClic }, [
@@ -41,21 +42,36 @@
     ]);
     const c = R.colorSeguro(color);
     if (c) b.style.setProperty('--rc', c);
+    if (muestra) P.portada(b, muestra);
     return h('li', {}, b);
   }
 
+  /* Un artista sugerido: su radio de «más como esto» empieza con una búsqueda; el locutor dice a quién se va a oír. */
+  function tocarArtista(a) {
+    P.cargando('Buscando lo mejor de ' + a.name, 'Después siguen canciones parecidas.');
+    P.anunciarEscucha('cancion', a.name);
+    P.send({ cmd: 'search', q: String(a.query || a.name).slice(0, 100) });
+  }
+  function tarjetaArtista(a, sup) {
+    return tarjeta({
+      emoji: a.emoji, sup: sup || a.genre || 'Artista', titulo: a.name, texto: a.reason,
+      aria: 'Escuchar a ' + a.name + (a.reason ? '. ' + a.reason : ''),
+      alClic: () => tocarArtista(a), muestra: { tipo: 'artista', clave: a.query || a.name }
+    });
+  }
+
   /* Pide, muestra «Cargando…» y pinta, o un error amable con Reintentar. */
-  async function cargarEn(lista, pedir, pintar, act) {
+  async function cargarEn(lista, pedir, pintar, act, esq) {
     lista.setAttribute('aria-busy', 'true');
     if (act) act.setAttribute('aria-disabled', 'true');
-    lista.replaceChildren(h('li', { class: 'cargando', text: 'Cargando…' }));
+    lista.replaceChildren(...P.esqueleto(esq || 'tarjeta', esq === 'episodio' ? 3 : 5));
     const r = await pedir();
     lista.removeAttribute('aria-busy');
     if (act) act.removeAttribute('aria-disabled');
     if (!r.ok || !r.data) {
       lista.replaceChildren(h('li', { class: 'vacio' }, [
         h('p', { text: L.mensajeError(r.status) }),
-        h('button', { type: 'button', class: 'primary', text: 'Reintentar', onclick: () => cargarEn(lista, pedir, pintar, act) })
+        h('button', { type: 'button', class: 'primary', text: 'Reintentar', onclick: () => cargarEn(lista, pedir, pintar, act, esq) })
       ]));
       return false;
     }
@@ -63,28 +79,50 @@
     return true;
   }
 
-  /* ───────────── Recomendado: «Mira lo que la IA tiene para ti» ───────────── */
+  /* ───────────── Lo más escuchado del momento: artistas (lo de la planta y lo de la hora) y géneros ───────────── */
   const revisarReco = carrusel($('recoScroll'), $('recoPrev'), $('recoNext'));
   function cargarReco() {
-    return cargarEn($('recoCards'), () => A.iaAhora(), (d) => {
+    return cargarEn($('recoCards'), () => A.iaMomento(), (d) => {
       const gens = Array.isArray(d.generos) ? d.generos.filter((g) => g && typeof g.id === 'string' && g.label) : [];
-      $('recoSub').textContent = d.razon || 'Seleccionado para este momento del día';
+      const arts = Array.isArray(d.artistas) ? d.artistas.filter((a) => a && typeof a.name === 'string' && a.name) : [];
+      $('recoSub').textContent = d.razon || 'Artistas y géneros que suenan ahora en la planta y a esta hora del día';
       $('recoFuente').textContent = L.fuenteTexto(d.fuente);
       setTimeout(revisarReco, 0);
-      if (!gens.length) return [h('li', { class: 'hint', text: 'No hay sugerencias por ahora. Toca «Nuevas sugerencias» en un momento.' })];
-      return gens.map((g) => tarjeta({
+      if (!arts.length && !gens.length) return [h('li', { class: 'hint', text: 'No hay sugerencias por ahora. Toca «Actualizar» en un momento.' })];
+      const cardsA = arts.map((a) => tarjetaArtista(a, a.popular ? 'Lo más escuchado' : a.genre));
+      const cardsG = gens.map((g) => tarjeta({
         emoji: g.emoji, color: g.color, sup: 'Radio continua', titulo: g.label, texto: g.razon,
         aria: 'Iniciar la radio de ' + g.label + (g.razon ? '. ' + g.razon : ''),
-        alClic: () => P.radioGenero(g.id, g.label)
+        alClic: () => P.radioGenero(g.id, g.label), muestra: { tipo: 'genero', clave: g.id }
       }));
+      return R.intercalar(cardsA, cardsG, 2);
     }, $('recoAct'));
   }
-  $('recoAct').addEventListener('click', () => { if ($('recoAct').getAttribute('aria-disabled') !== 'true') cargarReco(); });
+  $('recoAct').addEventListener('click', () => { if ($('recoAct').getAttribute('aria-disabled') !== 'true') cargarReco().then((ok) => { if (ok) P.toast('Lista actualizada.'); }); });
+
+  /* ───────────── Recomendado para ti: solo con cuenta, según lo que la persona escucha y marca con Me gusta ───────────── */
+  const revisarPt = carrusel($('ptScroll'), $('ptPrev'), $('ptNext'));
+  function cargarParaTi() {
+    return cargarEn($('ptCards'), () => A.iaParaTi(P.sid()), (d) => {
+      const items = (Array.isArray(d.items) ? d.items : []).filter((a) => a && typeof a.name === 'string' && a.name);
+      const gusto = d.context && d.context.topGenre;
+      $('ptSub').textContent = gusto ? 'Según lo que escuchas y tus Me gusta' : 'Aún estamos conociendo tus gustos: marca Me gusta y se afinan';
+      setTimeout(revisarPt, 0);
+      if (!items.length) return [h('li', { class: 'hint', text: 'Aún no hay recomendaciones. Escucha un rato y marca tus Me gusta.' })];
+      return items.map((a) => tarjetaArtista(a, a.isNew ? 'Nuevo para ti' : a.genre));
+    }, $('ptAct'));
+  }
+  $('ptAct').addEventListener('click', () => { if ($('ptAct').getAttribute('aria-disabled') !== 'true') cargarParaTi().then((ok) => { if (ok) P.toast('Recomendaciones actualizadas.'); }); });
+  function alUsuario(u) {
+    $('paraTiSec').hidden = !u;
+    if (u) cargarParaTi(); else $('ptCards').replaceChildren();
+  }
 
   /* ───────────── Bienestar rápido: un ánimo lleva a Bienestar y arranca el viaje ───────────── */
   async function cargarAnimos() {
     const cont = $('bzqGrupos');
     const r = await A.bienestarOpciones();
+    cont.removeAttribute('aria-busy');
     if (!r.ok || !r.data || !Array.isArray(r.data.animos)) {
       cont.replaceChildren(h('div', { class: 'vacio' }, [
         h('p', { text: L.mensajeError(r.status) }),
@@ -115,7 +153,7 @@
   /* ───────────── Géneros destacados: «O elige un género para iniciar Radio continua» ───────────── */
   async function cargarGeneros() {
     const grid = $('genGrid');
-    grid.replaceChildren(h('li', { class: 'cargando', text: 'Cargando géneros…' }));
+    grid.replaceChildren(...P.esqueleto('genero', 8));
     const r = await A.generos();
     const gens = r.ok ? R.generosDestacados(r.data) : [];
     if (!gens.length) {
@@ -132,6 +170,7 @@
       ]);
       const c = R.colorSeguro(g.color);
       if (c) b.style.setProperty('--gc', c);
+      P.portada(b, { tipo: 'genero', clave: g.id });
       return h('li', {}, b);
     }));
     P.remarcarSonando();
@@ -146,8 +185,9 @@
     img.addEventListener('error', () => { img.hidden = true; });
     const tocar = (video) => {
       P.cargando('Preparando el episodio', t.title);
+      P.anunciarEscucha('podcast', t.title);
       P.send({ cmd: 'track', kind: 'podcast', track: { id: t.id, title: t.title, channel: t.channel, duration: t.duration } });
-      if (video) P.abrirVideo();
+      if (video) { P.finCarga(); P.abrirVideo(); } /* sin la capa de carga encima del visor */
     };
     return h('li', { class: 'epi' }, [
       h('div', { class: 'epi-portada' }, [img]),
@@ -167,7 +207,7 @@
     return cargarEn($('podEpis'), () => A.podcastEpisodios(String(tema.query).slice(0, 100)), (lista) => {
       const eps = (Array.isArray(lista) ? lista : []).filter((t) => t && typeof t.id === 'string' && t.title);
       return eps.length ? eps.slice(0, 12).map(episodio) : [h('li', { class: 'hint', text: 'No encontré episodios de este tema. Prueba otro.' })];
-    });
+    }, null, 'episodio');
   }
   function cargarPodcasts() {
     podCargados = true;
@@ -189,11 +229,13 @@
       });
     }, $('podAct'));
   }
-  $('podAct').addEventListener('click', () => { if ($('podAct').getAttribute('aria-disabled') !== 'true') cargarPodcasts(); });
+  $('podAct').addEventListener('click', () => { if ($('podAct').getAttribute('aria-disabled') !== 'true') cargarPodcasts().then((ok) => { if (ok) P.toast('Podcasts actualizados.'); }); });
   P.on('sub', (s) => { if (s === 'podcasts' && !podCargados) cargarPodcasts(); });
   if (P.subInicio() === 'podcasts') cargarPodcasts();
 
   cargarReco();
   cargarAnimos();
   cargarGeneros();
+  P.on('usuario', alUsuario);
+  alUsuario(P.usuario());
 })();

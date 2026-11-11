@@ -26,13 +26,14 @@
   }
   function tocarConsulta(nombre, query) {
     P.cargando('Buscando lo mejor para recomendarte', nombre);
+    P.anunciarEscucha('cancion', nombre);
     P.send({ cmd: 'search', q: String(query).slice(0, 100) });
   }
 
   /* Pide, muestra "Cargando…", y pinta o muestra un error amable con Reintentar. */
   async function cargarEn(cuerpo, pedir, pintar) {
     cuerpo.setAttribute('aria-busy', 'true');
-    cuerpo.replaceChildren(h('p', { class: 'cargando', text: 'Cargando…' }));
+    cuerpo.replaceChildren(...P.esqueleto('fila', 4, 'div'));
     const r = await pedir();
     cuerpo.removeAttribute('aria-busy');
     if (!r.ok || !r.data) {
@@ -139,7 +140,7 @@
       d.descripcion ? h('p', { class: 'hint', text: d.descripcion }) : null,
       fuenteEl(d.fuente),
       h('div', { class: 'row izq' }, [
-        h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando tu lista', 'Buscando la primera canción…'); P.send(L.queueFromQueries(consultas)); } }),
+        h('button', { type: 'button', class: 'primary', text: 'Reproducir todo', onclick: () => { P.cargando('Preparando tu lista', 'Buscando la primera canción…'); P.anunciarEscucha('lista', d.nombre || 'tu lista'); P.send(L.queueFromQueries(consultas)); } }),
         guardar
       ]),
       progreso,

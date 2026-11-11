@@ -75,6 +75,39 @@ function sinVistos(list, vistos, minimo) {
   return frescos.length >= minimo ? frescos : list;
 }
 
+/* — Lo más escuchado del momento: géneros Y artistas. Primero lo que más se oyó en la planta (pop = { artistas:[{name,n}], generos:[{id,n}] },
+ * conteos agregados de src/popularidad.js); si no alcanza, los artistas que van con la hora (mismos ánimos que los géneros de ahora). — */
+function momento({ hour, genres, seeds, taste, pop, recientes = [], rng = Math.random, nGeneros = 6, nArtistas = 8 }) {
+  const base = ahora({ hour, genres, taste, recientes, rng, n: nGeneros });
+  const evitar = taste ? taste.generos.evitar : [];
+  const permitido = (genero) => !matchesAny(genero, evitar, genres);
+  const porNombre = new Map(seeds.map((a) => [norm(a.artist), a]));
+  const vistos = new Set();
+  const artistas = [];
+  const poner = (it) => { const k = norm(it.name); if (k && !vistos.has(k) && artistas.length < nArtistas) { vistos.add(k); artistas.push(it); } };
+
+  /* géneros: un género popular de la planta entra entre las sugerencias (si no está ya ni se evita) */
+  const generos = base.generos.slice();
+  for (const g of (pop && pop.generos) || []) {
+    const def = genres.find((x) => x.id === g.id);
+    if (!def || (taste && taste.generos.evitar.includes(def.id)) || generos.some((x) => x.id === def.id)) continue;
+    generos.unshift(pubGenre(def, 'Lo que más se escucha en la planta'));
+    generos.length = Math.min(generos.length, nGeneros);
+    break;
+  }
+
+  for (const a of (pop && pop.artistas) || []) {
+    const sem = porNombre.get(norm(a.name));
+    if (sem && !permitido(sem.genre)) continue;
+    poner({ name: sem ? sem.artist : a.name, query: sem ? sem.query : (a.name + ' official music video').slice(0, 140), genre: sem ? sem.genre : '', reason: 'Lo más escuchado esta semana en la planta', emoji: sem ? sem.emoji || '🎵' : '🔥', isNew: false, popular: true });
+  }
+
+  const moods = MOODS_FRANJA[base.franja];
+  const delMomento = seeds.filter((a) => permitido(a.genre) && genres.some((x) => sameGenre(a.genre, x.id, x.label) && moods.includes(x.mood)));
+  for (const a of sample(delMomento.length >= nArtistas ? delMomento : seeds.filter((x) => permitido(x.genre)), nArtistas * 2, rng)) poner(card(a));
+  return { franja: base.franja, razon: base.razon, generos, artistas };
+}
+
 /* — Hecho para ti: 8 afines + 4 nuevos — */
 function paraTi({ taste, hour, seeds, genres, vistos = new Set(), rng = Math.random, n = 12 }) {
   const gustan = taste ? taste.generos.gustan : [];
@@ -187,4 +220,4 @@ function playlist({ texto, genres, seeds, taste, rng = Math.random, max = 12 }) 
   return { nombre, descripcion: 'Armada con tus palabras y tus gustos', consultas: consultas.slice(0, max) };
 }
 
-module.exports = { franja, ahora, paraTi, descubrir, artistas, podcasts, playlist, norm, sameGenre, matchesAny, weightedSample, shuffle, sample };
+module.exports = { franja, ahora, momento, paraTi, descubrir, artistas, podcasts, playlist, norm, sameGenre, matchesAny, weightedSample, shuffle, sample };

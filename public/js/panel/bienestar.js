@@ -33,7 +33,7 @@
   }
 
   async function cargarOpciones() {
-    els.cuerpo.replaceChildren(h('p', { class: 'cargando', text: 'Cargando opciones…' }));
+    els.cuerpo.replaceChildren(h('div', { class: 'esq-fila-chips', 'aria-busy': 'true' }, P.esqueleto('chip', 8, 'span')));
     const r = await A.bienestarOpciones();
     if (!r.ok || !r.data || !Array.isArray(r.data.animos)) {
       els.cuerpo.replaceChildren(h('div', { class: 'vacio' }, [
@@ -165,6 +165,8 @@
     if (!L.peticionValida(req)) { els.estadoMsg.textContent = 'Elige cómo te sientes o escríbelo con tus palabras.'; return; }
     els.estadoMsg.textContent = 'Armando tu viaje…';
     P.cargando('Pensando…', 'Armando tu viaje según cómo te sientes.', { ia: true });
+    const animoSel = req.estado ? animoPorId(req.estado) : null;
+    if (animoSel) P.anunciarEscucha('bienestar', animoSel.label);
     ocupar(true);
     const r = await A.bienestarIniciar(P.sid(), req);
     ocupar(false);

@@ -30,6 +30,8 @@ const { createAnuncios } = require('./src/anuncios');
 const { createAjustes } = require('./src/ajustes');
 const { createDiagnostico } = require('./src/diagnostico');
 const { createCalentador } = require('./src/calentador');
+const { createPopularidad } = require('./src/popularidad');
+const { createMuestras } = require('./src/muestras');
 const genres = require('./data/genres.json');
 
 const PORT = Number(process.env.PORT) || 8000;
@@ -57,7 +59,10 @@ const radio = createRadio({
 const gemini = createGemini({ key: process.env.GEMINI_KEY || '', ...(process.env.GEMINI_MODEL ? { model: process.env.GEMINI_MODEL } : {}) });
 const geminiJson = gemini.json;
 gemini.json = (...a) => geminiJson(...a).catch((e) => { if (e && e.code !== 'GEMINI_OFF') diag.add('gemini', 'aviso', (e && (e.code || e.message)) + ' → respaldo local'); throw e; });
-const ia = createIa({ genres, artistas: require('./data/seed/artistas.json'), podcasts: require('./data/seed/podcasts.json'), gemini });
+const popularidad = createPopularidad({ dir: DATA_DIR }); /* lo más escuchado de la planta: solo conteos por artista y género */
+const ia = createIa({ genres, artistas: require('./data/seed/artistas.json'), podcasts: require('./data/seed/podcasts.json'), popularidad, gemini });
+const muestras = createMuestras({ radio, search: (q, n) => ytdlp.search(q, n), filtro: (t) => ajustes.permite(t) }); /* carátula y miniclip de los banners */
+process.on('exit', () => { try { popularidad.guardar(); } catch (_) { /* sin disco */ } });
 
 /* Calentador: en segundo plano tiene canciones listas (buscadas y resueltas) de los géneros destacados, de a uno cada CALENTAR_CADA_MS
  * (15 s; 0 lo apaga). Los géneros que la gente pide pasan al frente. Así cambiar de género en el panel empieza al instante. */
@@ -71,9 +76,12 @@ const control = createControl();
 const programa = createPrograma({ dir: DATA_DIR, genres, clock: reloj }); /* horario de las pantallas */
 const anuncios = createAnuncios({ dir: DATA_DIR, send: (c) => control.send(c), clock: reloj, tickMs: 20 * 1000 });
 
+if (!process.env.ENTRADA_SECRETO) diag.add('auth', 'aviso', '/entrar acepta enlaces sin firmar (define ENTRADA_SECRETO si otro sistema lo usa)');
+else if (process.env.ENTRADA_SECRETO.length < 16) diag.add('auth', 'aviso', 'ENTRADA_SECRETO es corto: usa al menos 16 caracteres');
+
 const server = createServer({
   publicDir: path.join(__dirname, 'public'),
-  genres, ytdlp, radio, proxy,
+  genres, ytdlp, radio, proxy, muestras, popularidad,
   thumbs: createThumbs(),
   lyrics: createLyrics(),
   control, programa, anuncios, ajustes, diag,
@@ -93,6 +101,8 @@ const server = createServer({
   /* episodios: de 5 min a 4 h */
   episodes: (q, n) => ytdlp.search(episodeQuery(q), n, { minSec: 300 }),
   token: TOKEN,
+  entradaSecreto: process.env.ENTRADA_SECRETO || '', /* firma del enlace /entrar (opcional pero recomendada) */
+  relojEntrada: reloj, /* la vigencia de la firma usa la hora corregida por la red (la Pi puede tener el reloj atrasado) */
   panelOpen: process.env.PANEL_PUBLICO !== '0' /* /panel no pide clave; PANEL_PUBLICO=0 lo cierra */
 });
 

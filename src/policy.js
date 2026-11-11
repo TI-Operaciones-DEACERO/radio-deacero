@@ -40,7 +40,9 @@ const ROUTES = [
   r('GET', /^\/api\/buscar$/, 'oyente', { needs: 'sid' }),
 
   /* — IA: recomendaciones para el oyente (cada una puede costar una llamada a Gemini: hay límite de ritmo) — */
-  r('GET', /^\/api\/ia\/(ahora|podcasts|artistas|playlist)$/, 'oyente'),
+  r('GET', /^\/api\/ia\/(ahora|momento|podcasts|artistas|playlist)$/, 'oyente'),
+  /* Muestra (carátula + miniclip) del banner de un género o artista. El de artista lanza una búsqueda: pide ?sid= (o la clave) y tiene un cupo corto por IP; el sid solo lo inventa el navegador, así que lo que de verdad lo acota es ese cupo y la cola del servidor. */
+  r('GET', /^\/api\/muestra$/, 'oyente'),
   r('GET', /^\/api\/ia\/(para-ti|descubrir)$/, 'oyente', { needs: 'sid' }),
   r('GET', /^\/api\/ia\/estado$/, 'clave'),
 

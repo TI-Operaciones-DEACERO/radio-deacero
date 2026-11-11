@@ -38,7 +38,7 @@ function cleanPlaylist(p) {
   return consultas.length >= 6 ? { nombre: txt(p.nombre, 60) || 'Mezcla para ti', descripcion: txt(p.descripcion, 140), consultas } : null;
 }
 
-function createIa({ genres, artistas, podcasts, gemini = null, rng = Math.random, now = Date.now, cacheMs = 10 * 60 * 1000 }) {
+function createIa({ genres, artistas, podcasts, popularidad = null, gemini = null, rng = Math.random, now = Date.now, cacheMs = 10 * 60 * 1000 }) {
   const seenBySid = new Map();   /* sid → artistas ya mostrados (en minúsculas) */
   const cache = new Map();       /* clave → { t, v } */
 
@@ -57,6 +57,12 @@ function createIa({ genres, artistas, podcasts, gemini = null, rng = Math.random
 
   async function ahora({ taste, hour, recientes }) {
     return { fuente: 'local', ...local.ahora({ hour, genres, taste, recientes, rng }) };
+  }
+
+  /* «Lo más escuchado del momento»: lo de la planta (conteos agregados) + los artistas de la hora. Sin Gemini: no necesita un modelo. */
+  async function momento({ taste, hour, recientes }) {
+    const pop = popularidad && popularidad.top ? popularidad.top({ n: 8 }) : null;
+    return { fuente: 'local', ...local.momento({ hour, genres, seeds: artistas, taste, pop, recientes, rng }) };
   }
 
   async function podcastsHoy({ hour }) {
@@ -117,7 +123,7 @@ function createIa({ genres, artistas, podcasts, gemini = null, rng = Math.random
     return v;
   }
 
-  return { ahora, podcasts: podcastsHoy, artistas: artistasDe, paraTi, descubrir, playlist, gemini: () => (gemini && gemini.status ? gemini.status() : { enabled: false }) };
+  return { ahora, momento, podcasts: podcastsHoy, artistas: artistasDe, paraTi, descubrir, playlist, gemini: () => (gemini && gemini.status ? gemini.status() : { enabled: false }) };
 }
 
 module.exports = { createIa, cleanItems, cleanPlaylist };

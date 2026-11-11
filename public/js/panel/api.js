@@ -68,7 +68,10 @@
 
     /* IA (abierta, sin cuenta) */
     iaAhora: () => call('GET', '/api/ia/ahora'),
+    iaMomento: () => call('GET', '/api/ia/momento'),
     iaPodcasts: () => call('GET', '/api/ia/podcasts'),
+    muestraGenero: (g) => call('GET', '/api/muestra?g=' + e(g)),
+    muestraArtista: (a, sid) => call('GET', '/api/muestra?a=' + e(String(a).slice(0, 100)) + '&sid=' + e(sid)),
     podcastEpisodios: (q) => call('GET', '/api/podcast/search?q=' + e(q)),
     iaParaTi: (sid) => call('GET', '/api/ia/para-ti?sid=' + e(sid)),
     iaDescubrir: (sid, prefer, avoid) => call('GET', '/api/ia/descubrir?sid=' + e(sid) + (prefer && prefer.length ? '&prefer=' + e(prefer.join(',')) : '') + (avoid && avoid.length ? '&avoid=' + e(avoid.join(',')) : '')),
