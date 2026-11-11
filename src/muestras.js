@@ -8,7 +8,8 @@ const SONG_MAX_SEC = 15 * 60;
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const pub = (t) => ({ id: t.id, title: String(t.title || '').slice(0, 200), duration: Number(t.duration) > 0 ? Number(t.duration) : 0 });
 
-function createMuestras({ radio, search, filtro = () => true, now = Date.now, ttlMs = 6 * 3600 * 1000, ttlFalloMs = 5 * 60 * 1000, max = 300, simultaneas = 2, maxEspera = 10 }) {
+/* preparar(id): resuelve de antemano el video de la muestra (yt-dlp tarda 10–15 s): así el miniclip arranca en cuanto se pasa el cursor. */
+function createMuestras({ radio, search, filtro = () => true, preparar = null, now = Date.now, ttlMs = 6 * 3600 * 1000, ttlFalloMs = 5 * 60 * 1000, max = 300, simultaneas = 2, maxEspera = 10 }) {
   const cache = new Map();    /* clave → { v (muestra o null), hasta } */
   const vuelo = new Map();    /* clave → promesa (peticiones iguales comparten trabajo) */
   let activas = 0;
@@ -26,6 +27,7 @@ function createMuestras({ radio, search, filtro = () => true, now = Date.now, tt
       if (!(await turno())) return null;
       let v = null;
       try { v = await calcular(); } catch (_) { v = null; } finally { libera(); }
+      if (v && preparar) Promise.resolve().then(() => preparar(v.id)).catch(() => { /* sin video preparado: el clip tardará, nada más */ });
       cache.delete(clave);
       cache.set(clave, { v, hasta: now() + (v ? ttlMs : ttlFalloMs) });
       while (cache.size > max) cache.delete(cache.keys().next().value);

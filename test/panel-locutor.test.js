@@ -4,41 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const LO = require('../public/js/panel/locutor-logica');
 
-test('frase: «Estás escuchando …» según lo que se eligió', () => {
-  assert.equal(LO.frase('genero', 'Rock en español'), 'Estás escuchando la radio de Rock en español');
-  assert.equal(LO.frase('cancion', 'Cuco - Lo Que Siento'), 'Estás escuchando Cuco - Lo Que Siento');
-  assert.equal(LO.frase('bienestar', 'Con ganas de concentrarme'), 'Estás escuchando tu viaje: Con ganas de concentrarme');
-  assert.equal(LO.frase('podcast', 'Episodio 12'), 'Estás escuchando el episodio Episodio 12');
-  assert.equal(LO.frase('lista', 'Mezcla tranquila'), 'Estás escuchando Mezcla tranquila');
-});
-
-test('frase: sin nombre o con un tipo raro no dice nada (mejor silencio que «undefined»)', () => {
-  assert.equal(LO.frase('genero', ''), '');
-  assert.equal(LO.frase('genero', null), '');
-  assert.equal(LO.frase('genero'), '');
-  assert.equal(LO.frase('otra-cosa', 'X'), 'Estás escuchando X');
-  assert.equal(LO.frase('cancion', '   '), '');
-});
-
-test('frase: quita lo que estorba al oído (Official Video, corchetes, URL) y corta lo muy largo', () => {
-  assert.equal(LO.frase('cancion', 'Cuco - Lo Que Siento (Official Video) [HD]'), 'Estás escuchando Cuco - Lo Que Siento');
-  assert.equal(LO.frase('cancion', 'Banda MS - Tengo Claro | Video Oficial'), 'Estás escuchando Banda MS - Tengo Claro');
-  const larga = LO.frase('cancion', 'a'.repeat(300));
-  assert.ok(larga.length <= 'Estás escuchando '.length + 80, 'tope de largo: ' + larga.length);
-  assert.ok(!/https?:/.test(LO.frase('cancion', 'mira https://x.com/abc esto')));
-});
-
-test('elegirVoz: prefiere es-MX natural/online, luego es-MX, luego cualquier español; sin español no hay voz', () => {
-  const v = (name, lang) => ({ name, lang });
-  const es = v('Microsoft Sabina', 'es-MX'), natural = v('Microsoft Dalia Online (Natural)', 'es-MX'), esp = v('Helena', 'es-ES'), en = v('David', 'en-US');
-  assert.equal(LO.elegirVoz([en, esp, es, natural]), natural);
-  assert.equal(LO.elegirVoz([en, esp, es]), es);
-  assert.equal(LO.elegirVoz([en, esp]), esp);
-  assert.equal(LO.elegirVoz([en]), null);
-  assert.equal(LO.elegirVoz([]), null);
-  assert.equal(LO.elegirVoz(null), null);
-});
-
 test('primerSonido: el primer momento en que SUENA música nueva tras la petición', () => {
   const suena = (id, extra = {}) => ({ track: { id }, loading: false, paused: false, time: 0.8, ...extra });
   assert.equal(LO.primerSonido('viejo', suena('nuevo')), true);
@@ -109,4 +74,14 @@ test('volumenVoz: sigue al volumen de la persona (sin el mínimo de 50 % de ante
   assert.equal(LO.volumenVoz(150), 1);
   assert.equal(LO.volumenVoz(-5), 0);
   assert.equal(LO.volumenVoz('x'), 0);
+});
+
+test('debeJingle: «Estás escuchando Radio Deacero» suena solo al empezar (una vez) y respeta el silencio de la persona', () => {
+  const base = { activo: true, silenciado: false, volumen: 70, yaSono: false };
+  assert.equal(LO.debeJingle(base), true);
+  assert.equal(LO.debeJingle({ ...base, yaSono: true }), false, 'solo la primera vez');
+  assert.equal(LO.debeJingle({ ...base, activo: false }), false);
+  assert.equal(LO.debeJingle({ ...base, silenciado: true }), false);
+  assert.equal(LO.debeJingle({ ...base, volumen: 0 }), false);
+  assert.equal(LO.debeJingle(null), false);
 });

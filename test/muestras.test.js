@@ -77,3 +77,16 @@ test('GET /api/muestra: de género o de artista (este último pide sesión), val
     assert.equal((await c.call('GET', '/api/muestra?g=jazz')).status, 401);
   });
 });
+
+test('al hallar una muestra deja PREPARADO su video (el miniclip arranca al instante); una sola vez y sin romper si falla', async () => {
+  const preparados = [];
+  const m = createMuestras({ radio: { muestra: async () => T(ID1) }, search: async () => [T(ID2)], preparar: async (id) => { preparados.push(id); } });
+  await m.genero('jazz'); await m.artista('Cuco');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(preparados.sort(), [ID1, ID2].sort());
+  await m.genero('jazz'); await m.artista('cuco');
+  await new Promise((r) => setImmediate(r));
+  assert.equal(preparados.length, 2, 'desde la caché no se vuelve a preparar');
+  const falla = createMuestras({ radio: { muestra: async () => T(ID3) }, search: async () => [], preparar: async () => { throw new Error('yt-dlp'); } });
+  assert.equal((await falla.genero('rock')).id, ID3, 'si preparar falla, la muestra se entrega igual');
+});

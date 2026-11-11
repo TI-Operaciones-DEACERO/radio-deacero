@@ -15,9 +15,18 @@
     ahorro: !!(navigator.connection && navigator.connection.saveData)
   });
 
-  /* — fila de espera: una muestra a la vez (cada artista nuevo es una búsqueda en el servidor) — */
-  let fila = Promise.resolve();
-  const encolar = (fn) => { fila = fila.then(fn, fn); return fila; };
+  /* — fila de espera: dos muestras a la vez (lo que el servidor atiende en paralelo; cada artista nuevo es una búsqueda) — */
+  const A_LA_VEZ = 2;
+  let enCurso = 0;
+  const pendientes = [];
+  function siguiente() {
+    while (enCurso < A_LA_VEZ && pendientes.length) {
+      const fn = pendientes.shift();
+      enCurso++;
+      Promise.resolve().then(fn).catch(() => { /* sin muestra: queda el emoji */ }).finally(() => { enCurso--; siguiente(); });
+    }
+  }
+  const encolar = (fn) => { pendientes.push(fn); siguiente(); };
 
   /* — clip activo (solo uno en toda la página) — */
   let activo = null;

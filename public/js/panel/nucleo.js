@@ -172,36 +172,33 @@
   $('visorCerrar').addEventListener('click', () => cerrarVideo(true));
   visor.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); cerrarVideo(true); } });
 
-  /* — locutor «Estás escuchando …»: al elegir música una voz (la del navegador, en español) dice qué se va a oír. Llena el silencio entre el toque y
-       el primer sonido; en cuanto la música suena la voz sigue, pero con la música baja (no se pisan). Se apaga en Apariencia → Sonido. — */
+  /* — locutor: al EMPEZAR a escuchar suena una vez «Estás escuchando Radio Deacero» (el mismo audio que / y /kiosco ponen cada 20 min), con la
+       música baja mientras dura. No se repite en cada elección. Se apaga en Apariencia → Sonido; calla si la persona silencia. — */
   const LS_LOCUTOR = 'pl_locutor';
   let locutorOn = store.get(LS_LOCUTOR) !== '0';
-  const loc = { habla: false, pend: null, seguro: 0 };
-  if ('speechSynthesis' in window) speechSynthesis.getVoices(); /* las voces cargan en segundo plano */
-  const vozEspanol = () => ('speechSynthesis' in window ? LO.elegirVoz(speechSynthesis.getVoices()) : null);
+  const loc = { habla: false, pend: null, seguro: 0, yaSono: false, audio: null };
   function duck(habla) { const p = player(); if (p && p.duck) { try { p.duck(LO.nivelDuck(habla)); } catch (_) { /* motor cargando */ } } }
   function finVoz() { clearTimeout(loc.seguro); if (!loc.habla) return; loc.habla = false; duck(false); }
-  /* tipo: genero | cancion | bienestar | podcast | lista. Se llama DENTRO del toque de la persona (si no, el navegador no deja hablar). */
-  function anunciarEscucha(tipo, nombre) {
-    if (!LO.debeHablar({ activo: locutorOn, silenciado: !!(estado && estado.muted), volumen: Number(vol.value) })) return;
-    const texto = LO.frase(tipo, nombre), voz = vozEspanol();
-    if (!texto || !voz) return;
+  function callarJingle() { if (loc.audio) { try { loc.audio.pause(); } catch (_) { /* nada */ } loc.audio = null; } finVoz(); }
+  /* Se llama DENTRO del toque de la persona (si no, el navegador no deja sonar). Los argumentos (qué se eligió) ya no se usan. */
+  function anunciarEscucha() {
+    if (!LO.debeJingle({ activo: locutorOn, silenciado: !!(estado && estado.muted), volumen: Number(vol.value), yaSono: loc.yaSono })) return;
+    loc.yaSono = true;
     try {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(texto);
-      u.voice = voz; u.lang = voz.lang; u.rate = 0.95; u.volume = LO.volumenVoz(vol.value);
-      u.onend = u.onerror = finVoz;
-      loc.habla = true;
+      const a = new Audio('/assets/jingle.mp3');
+      a.volume = LO.volumenVoz(vol.value);
+      a.addEventListener('ended', callarJingle); a.addEventListener('error', callarJingle);
+      loc.audio = a; loc.habla = true;
       loc.pend = { id: estado && estado.track ? estado.track.id : '' };
-      duck(true); /* si aún suena lo anterior, baja mientras se habla */
+      duck(true);
       clearTimeout(loc.seguro);
-      loc.seguro = setTimeout(finVoz, 12000); /* por si el navegador nunca avisa que terminó */
-      speechSynthesis.speak(u);
-    } catch (_) { finVoz(); }
+      loc.seguro = setTimeout(callarJingle, 40000); /* por si nunca avisa que terminó */
+      a.play().catch(callarJingle);
+    } catch (_) { callarJingle(); }
   }
-  /* El primer momento en que SUENA lo nuevo: si la voz aún habla, la música arranca baja (y sube al terminar). */
+  /* El primer momento en que SUENA lo nuevo: si el aviso aún suena, la música arranca baja (y sube al terminar). */
   function revisarLocutor(s) {
-    if (loc.habla && s && s.muted) { try { speechSynthesis.cancel(); } catch (_) { /* sin voz */ } finVoz(); } /* la persona silenció: la voz también calla */
+    if (loc.habla && s && s.muted) callarJingle(); /* la persona silenció: el aviso también calla */
     if (!loc.pend || !LO.primerSonido(loc.pend.id, s)) return;
     loc.pend = null;
     if (loc.habla) duck(true);
@@ -458,11 +455,10 @@
   $('bLike').addEventListener('click', conCancion((t) => reaccionar(t, 'like')));
   $('bDislike').addEventListener('click', conCancion((t) => reaccionar(t, 'dislike')));
   $('bAdd').addEventListener('click', conCancion((t) => abrirSelector(t)));
-  $('bPlay').addEventListener('click', async () => {
-    if (!(await send({ cmd: 'toggle' }))) return;
-    await new Promise((r) => setTimeout(r, 600));
-    const p = player(), s = p && p.getState();
-    if (s && s.track) toast((s.paused ? 'En pausa: ' : 'Ahora suena: ') + s.track.title);
+  /* Sin aviso flotante: el propio botón ya cambia entre ▶ y ❚❚ (y su nombre accesible entre Reproducir y Pausar). */
+  $('bPlay').addEventListener('click', () => {
+    if (!estado || !estado.track || estado.paused) anunciarEscucha(); /* empezar a escuchar */
+    send({ cmd: 'toggle' });
   });
   const pedirOtra = (cmd) => { esperaAnuncio = { id: estado && estado.track ? estado.track.id : '', t0: Date.now() }; send({ cmd }); };
   $('bNext').addEventListener('click', () => pedirOtra('next'));
@@ -809,11 +805,11 @@
   }
   function pintarSonido() {
     $('locutorOn').checked = locutorOn;
-    $('locutorNota').textContent = ('speechSynthesis' in window && vozEspanol() ? 'Usa la voz en español de tu navegador. ' : 'Tu navegador no tiene una voz en español: el locutor no sonará. ') + 'Calla si silencias la música. Si usas un lector de pantalla, puede convenir apagarlo.';
+    $('locutorNota').textContent = 'Suena una sola vez, al empezar a escuchar, con la música baja mientras dura. Calla si silencias la música.';
   }
   $('locutorOn').addEventListener('change', () => {
     locutorOn = $('locutorOn').checked;
-    if (locutorOn) store.del(LS_LOCUTOR); else { store.set(LS_LOCUTOR, '0'); try { speechSynthesis.cancel(); } catch (_) { /* sin voz */ } finVoz(); }
+    if (locutorOn) store.del(LS_LOCUTOR); else { store.set(LS_LOCUTOR, '0'); callarJingle(); }
     toast(locutorOn ? 'Locutor activado.' : 'Locutor desactivado.');
   });
   $('aparienciaBtn').addEventListener('click', () => {
@@ -877,7 +873,7 @@
     const abierto = document.querySelector('dialog[open]');
     if (abierto && !(abierto.id === 'letras' && ['toggle', 'next', 'letras', 'karaoke'].includes(accion))) return;
     e.preventDefault();
-    if (accion === 'toggle') { if (estado && estado.track) send({ cmd: 'toggle' }); }
+    if (accion === 'toggle') { if (estado && estado.track) { if (estado.paused) anunciarEscucha(); send({ cmd: 'toggle' }); } }
     else if (accion === 'next') pedirOtra('next');
     else if (accion === 'letras' || accion === 'karaoke') {
       const m = modulos.letras;

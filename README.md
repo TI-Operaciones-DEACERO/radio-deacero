@@ -81,11 +81,13 @@ Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno
 - **Lo más escuchado del momento** (Inicio → Recomendado): artistas y géneros **de toda la planta**. Va primero lo que más se ha servido en los últimos 14 días
   (`src/popularidad.js`: **solo conteos por artista y género** —sin sesión, cuenta ni IP—; un artista aparece si llegó a 3 reproducciones) y se completa con los artistas
   que van con la hora (`/api/ia/momento`, motor local, sin Gemini). **Recomendado para ti** (solo con sesión) es lo **personal**: según lo que escuchas y tus Me gusta (`/api/ia/para-ti`).
-- **Banners con carátula y miniclip:** las tarjetas de género y artista muestran la carátula de una canción de muestra (`/api/muestra`, con caché; una a la vez para no saturar yt-dlp)
+- **Banners con carátula y miniclip:** las tarjetas de género y artista muestran la carátula de una canción de muestra (`/api/muestra`, con caché; dos a la vez para no saturar yt-dlp;
+  al hallar la muestra el servidor deja **preparado su video**, para que el miniclip arranque en cuanto se pasa el cursor)
   y, al pasar el cursor o enfocar con el teclado, un **miniclip mudo** de 5 s (sin bucle). Solo con ratón, sin «reducir movimiento» ni ahorro de datos; uno a la vez; `Esc` lo quita. En el celular, solo la carátula.
   Los álbumes no existen en la app (todo sale de búsquedas de canciones), por eso solo hay banners de género y artista.
-- **Locutor «Estás escuchando…»:** al elegir un género, canción, viaje de Bienestar, podcast o lista, una voz en español del navegador dice qué se va a oír; llena el silencio hasta el primer sonido y,
-  si aún habla cuando la música arranca, la música entra baja y sube al terminar. Se apaga en *Apariencia → Sonido* (se recuerda en el navegador). Sin voz en español, no suena.
+- **Aviso «Estás escuchando Radio Deacero»:** el mismo audio (`/assets/jingle.mp3`) que `/` y `/kiosco` ponen cada 20 min; en el panel suena **una sola vez, al empezar
+  a escuchar** (primer Play o primera música elegida), con la música baja mientras dura. Se apaga en *Apariencia → Sonido* (se recuerda en el navegador); calla si se silencia.
+- **Sin avisos flotantes de reproducción:** Play/Pausa no muestran «Ahora suena» / «En pausa»; el botón ya cambia de ▶ a ❚❚ (el lector de pantalla oye «Reproducir»/«Pausar»).
 - **Ver video:** además del botón de la barra, está en cada resultado de *Buscar* y en cada episodio de podcast (el video no lleva sonido propio: sigue al audio).
 - **No me gusta** de verdad: los géneros que alguien rechaza dejan de salir en *su* rotación (no en la de los demás).
 - **Para ti / IA:** recomendado ahora, hecho para ti, descubrir, artistas, podcasts y playlists. Usa **Gemini** si hay `GEMINI_KEY` (límite de 30/min y 1500/día,
