@@ -97,6 +97,7 @@
         <button type="button" class="rsub" role="tab" id="rs-reco" aria-selected="true" aria-controls="sp-reco" data-sub="reco"><i class="fa-brands fa-cloudversify" aria-hidden="true"></i> Recomendado</button>
         <button type="button" class="rsub" role="tab" id="rs-bienestar" aria-selected="false" aria-controls="p-bienestar" tabindex="-1" data-sub="bienestar"><i class="fas fa-heart-pulse" aria-hidden="true"></i> Bienestar</button>
         <button type="button" class="rsub" role="tab" id="rs-podcasts" aria-selected="false" aria-controls="sp-podcasts" tabindex="-1" data-sub="podcasts"><i class="fas fa-microphone-lines" aria-hidden="true"></i> Podcasts</button>
+        <button type="button" class="rsub" role="tab" id="rs-envivo" aria-selected="false" aria-controls="sp-envivo" tabindex="-1" data-sub="envivo"><i class="fas fa-tower-broadcast" aria-hidden="true"></i> En vivo</button>
       </div>
 
       <!-- Recomendado -->
@@ -173,6 +174,15 @@
       <div class="rsub-pane" id="p-bienestar" role="tabpanel" aria-labelledby="rs-bienestar" tabindex="0" hidden></div>
 
       <!-- Podcasts -->
+      <!-- Radio en vivo: emisoras de Monterrey (lista curada; el servidor hace de proxy) -->
+      <div class="rsub-pane" id="sp-envivo" role="tabpanel" aria-labelledby="rs-envivo" tabindex="0" hidden>
+        <section class="aireco-section" aria-labelledby="vivoT">
+          <h2 class="aireco-title" id="vivoT">Radio en vivo</h2>
+          <p class="aireco-subtitle" id="vivoSub">Estaciones de Monterrey en FM y AM, en directo</p>
+          <div id="vivoGrupos" aria-busy="true"></div>
+        </section>
+      </div>
+
       <div class="rsub-pane" id="sp-podcasts" role="tabpanel" aria-labelledby="rs-podcasts" tabindex="0" hidden>
         <section class="aireco-section" aria-labelledby="podT">
           <div class="aireco-header">

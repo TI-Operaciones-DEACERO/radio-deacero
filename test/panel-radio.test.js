@@ -207,3 +207,27 @@ test('todosLosGeneros: lista completa por nombre; el filtro ignora acentos y may
   assert.deepEqual(R.todosLosGeneros(lista, 'zzz'), []);
   assert.deepEqual(R.todosLosGeneros(null), []);
 });
+
+test('En vivo: es subpestaña de Inicio (como Podcasts) y en el celular cae en Inicio', () => {
+  assert.deepEqual(R.destino('envivo'), { vista: 'envivo', panel: 'inicio', sub: 'envivo' });
+  assert.equal(R.pestanaMovil('envivo'), 'inicio');
+});
+
+test('gruposEmisoras: FM, AM y Solo en línea, en ese orden, sin grupos vacíos ni entradas raras', () => {
+  const l = [
+    { id: 'a', nombre: 'A', banda: 'AM' }, { id: 'f', nombre: 'F', banda: 'FM' }, { id: 'i', nombre: 'I', banda: 'Internet' },
+    { id: 'g', nombre: 'G', banda: 'FM' }, { id: 'x', nombre: 'X', banda: 'Onda corta' }, null, { nombre: 'sin id', banda: 'FM' }
+  ];
+  const g = R.gruposEmisoras(l);
+  assert.deepEqual(g.map((x) => [x.titulo, x.emisoras.map((e) => e.id)]), [['FM', ['f', 'g']], ['AM', ['a']], ['Solo en línea', ['i']]]);
+  assert.deepEqual(R.gruposEmisoras([{ id: 'f', nombre: 'F', banda: 'FM' }]).map((x) => x.titulo), ['FM']);
+  assert.deepEqual(R.gruposEmisoras(null), []);
+});
+
+test('progreso: una emisora en vivo dice «En vivo» y no se puede adelantar', () => {
+  const p = R.progreso({ time: 125, duration: Infinity, track: { id: 'envivo-x', live: true, duration: 0 } });
+  assert.equal(p.texto, 'En vivo');
+  assert.equal(p.total, '', 'una sola vez: no a los dos lados de la barra');
+  assert.equal(p.buscable, false);
+  assert.equal(p.pct, 0);
+});

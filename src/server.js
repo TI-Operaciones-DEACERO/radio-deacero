@@ -69,7 +69,7 @@ function localIps() {
 /* Id de sesión de un oyente independiente (/panel): lo inventa el navegador. */
 const SESSION_ID = /^[A-Za-z0-9_-]{8,40}$/;
 
-function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, muestras, popularidad, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, onGenero, token = '', entradaSecreto = '', relojEntrada = null, claveMax = 15, muestraArtistaMax = 20, trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
+function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, muestras, emisoras, popularidad, lyrics, control, clients, history, podcasts, episodes, timesync, users, sessions, library, ia, programa, anuncios, ajustes, diag, onGenero, token = '', entradaSecreto = '', relojEntrada = null, claveMax = 15, muestraArtistaMax = 20, trustLoopback = true, panelOpen = true, cookieSecure = false, panelV2 = false, panelPrincipal = 'simple', hostsPermitidos = [], loginMax, iaMax, iaGeminiMax, meMax, nextMax = 60, bienestarMax, now = Date.now }) {
   const anotar = (servicio, nivel, msg) => { if (diag) diag.add(servicio, nivel, msg); };
   const permite = (t) => (ajustes ? ajustes.permite(t) : true);
   const admin = createAdminRoutes({
@@ -306,6 +306,11 @@ function createServer({ publicDir, genres, ytdlp, radio, proxy, thumbs, muestras
       if (!VIDEO_ID.test(m[1]) || !['audio', 'video'].includes(mode)) return json(res, 400, { error: 'Parámetros inválidos' });
       return proxy.handle(req, res, m[1], mode);
     }
+
+    /* Radio en vivo (lista curada en data/seed/emisoras.json; el servidor hace de proxy del flujo) */
+    if (p === '/api/emisoras') return emisoras ? json(res, 200, { emisoras: emisoras.list() }) : json(res, 404, { error: 'Endpoint no encontrado' });
+    m = /^\/api\/emisora\/([a-z0-9-]{1,40})$/.exec(p);
+    if (m) return emisoras ? emisoras.escuchar(m[1], req, res) : json(res, 404, { error: 'Endpoint no encontrado' });
 
     m = /^\/api\/thumb\/([^/]+)$/.exec(p);
     if (m) {

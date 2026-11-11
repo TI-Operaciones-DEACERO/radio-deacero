@@ -1,0 +1,33 @@
+{
+  "_nota": "Radio en vivo: lista curada de emisoras de Monterrey (transmisión pública en línea). Las sirve el servidor como proxy (/api/emisora/<id>): solo estas, nunca una URL arbitraria. Comprobadas desde la red de la planta el 2026-11-11.",
+  "emisoras": [
+    { "id": "la-lupe", "nombre": "La Lupe", "frecuencia": "105.3 FM", "banda": "FM", "estilo": "Clásicos en español", "url": "https://mmradio-lb.mmlabs.mx/xhlupefm" },
+    { "id": "la-mejor", "nombre": "La Mejor", "frecuencia": "92.5 FM", "banda": "FM", "estilo": "Banda y grupera", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/XHSROFM_SC" },
+    { "id": "banda-933", "nombre": "Banda 93.3", "frecuencia": "93.3 FM", "banda": "FM", "estilo": "Banda y grupera", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/XHQQ_FMAAC.aac" },
+    { "id": "la-caliente", "nombre": "La Caliente", "frecuencia": "94.1 FM", "banda": "FM", "estilo": "Banda, norteña y cumbia", "url": "https://mdstrm.com/audio/67378f24a675400dcf8f0b4c/icecast.audio" },
+    { "id": "la-sabrosita", "nombre": "La Sabrosita", "frecuencia": "95.7 FM", "banda": "FM", "estilo": "Grupera", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/LASABROSITA_957FMAAC.aac" },
+    { "id": "la-ranchera-fm", "nombre": "La Ranchera", "frecuencia": "90.1 FM", "banda": "FM", "estilo": "Grupera y corridos", "url": "https://streamingcwsradio30.com/8236/stream" },
+    { "id": "ky", "nombre": "KY", "frecuencia": "104.5 FM", "banda": "FM", "estilo": "Música en español", "url": "https://cdn1.onstream.audio/proxy/xhmf/stream" },
+    { "id": "premier", "nombre": "Premier", "frecuencia": "91.7 FM", "banda": "FM", "estilo": "Baladas en español", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_917.mp3" },
+    { "id": "genesis", "nombre": "Génesis", "frecuencia": "98.1 FM", "banda": "FM", "estilo": "Baladas románticas", "url": "https://streamingcwsradio30.com/8238/stream" },
+    { "id": "globo", "nombre": "Globo", "frecuencia": "88.1 FM", "banda": "FM", "estilo": "Éxitos en español", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/XHJMFM_SC" },
+    { "id": "hits", "nombre": "Hits", "frecuencia": "106.1 FM", "banda": "FM", "estilo": "Pop latino", "url": "https://mdstrm.com/audio/67378c85b95cc90e1003e224/icecast.audio" },
+    { "id": "los40", "nombre": "Los 40", "frecuencia": "88.5 FM", "banda": "FM", "estilo": "Pop y éxitos", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/LOS40_MTYAAC.aac" },
+    { "id": "exa", "nombre": "Exa FM", "frecuencia": "97.3 FM", "banda": "FM", "estilo": "Pop y éxitos", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/XHRSMTYFMAAC.aac" },
+    { "id": "d99", "nombre": "D99", "frecuencia": "98.9 FM", "banda": "FM", "estilo": "Pop juvenil", "url": "https://mdstrm.com/audio/662800a9c30cbb3e2e61f44b/icecast.audio" },
+    { "id": "digital", "nombre": "Digital", "frecuencia": "102.9 FM", "banda": "FM", "estilo": "Éxitos en inglés", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/DIGITAL_1029FMAAC.aac" },
+    { "id": "classic", "nombre": "Classic", "frecuencia": "106.9 FM", "banda": "FM", "estilo": "Clásicos en inglés 70s, 80s y 90s", "url": "https://mmradio-lb.mmlabs.mx/xhpjfm" },
+    { "id": "udem", "nombre": "Radio UDEM", "frecuencia": "90.5 FM", "banda": "FM", "estilo": "Universitaria", "url": "http://c3.radioboss.fm:8161/stream" },
+    { "id": "la-t-grande", "nombre": "La T Grande", "frecuencia": "990 AM", "banda": "AM", "estilo": "Gruperas del recuerdo", "url": "https://mdstrm.com/audio/672a602bce5982a130a01a1d/icecast.audio" },
+    { "id": "la-ranchera-am", "nombre": "La Ranchera", "frecuencia": "1050 AM", "banda": "AM", "estilo": "Grupera", "url": "http://streamingcwsradio20.com:9410/stream" },
+    { "id": "radio-recuerdo", "nombre": "Radio Recuerdo", "frecuencia": "860 AM", "banda": "AM", "estilo": "Baladas del recuerdo", "url": "https://mdstrm.com/audio/672a5df773078862801f389f/icecast.audio" },
+    { "id": "la-gran-aw", "nombre": "La Gran AW", "frecuencia": "1280 AM", "banda": "AM", "estilo": "Baladas en español", "url": "https://mdstrm.com/audio/672a54e1064f16625e497b86/icecast.audio" },
+    { "id": "contacto", "nombre": "Contacto", "frecuencia": "1190 AM", "banda": "AM", "estilo": "Baladas 70s, 80s y 90s", "url": "https://streamingcwsradio30.com/8240/stream" },
+    { "id": "la-h", "nombre": "La H", "frecuencia": "1420 AM", "banda": "AM", "estilo": "Vallenato y cumbia", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/XEH_AMAAC.aac" },
+    { "id": "abc-deportes", "nombre": "ABC Deportes", "frecuencia": "660 AM", "banda": "AM", "estilo": "Deportes", "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/ABC_NOTICIAS_660AM.mp3" },
+    { "id": "la-deportiva", "nombre": "La Deportiva", "frecuencia": "690 AM", "banda": "AM", "estilo": "Deportes", "url": "https://mdstrm.com/audio/6737979da7a64ff86b12afc4/icecast.audio" },
+    { "id": "radio-formula", "nombre": "Radio Fórmula", "frecuencia": "1230 AM", "banda": "AM", "estilo": "Noticias", "url": "https://stream.radiojar.com/nk2k3a84xp8uv" },
+    { "id": "cafe-romantico", "nombre": "Café Romántico Radio", "frecuencia": "En línea", "banda": "Internet", "estilo": "Baladas de los 80s en español", "url": "https://panel.retrolandigital.com/radio/8110/listen" },
+    { "id": "cumbias-inmortales", "nombre": "Cumbias Inmortales", "frecuencia": "En línea", "banda": "Internet", "estilo": "Cumbias clásicas", "url": "https://panel.retrolandigital.com/listen/cumbias_inmortales_radio/listen" }
+  ]
+}

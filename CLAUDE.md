@@ -27,6 +27,7 @@ La prueba «la matriz entera tarda poco» (test/bienestar.test.js) mide tiempo: 
 | `src/server.js` | HTTP: Host permitido, Origin=Host en escrituras, nivel, límites de ritmo, estáticos y CSP del panel |
 | `src/radio.js` | elige género/canción por sesión (`sid`); la sesión principal = pantallas. Oyente: búsqueda/canción elegida → racha «semilla» (más como esto); lo pedido descarta precargas en fila (`STALE`); comprueba 3 a la vez. Toda pista se **sondea** antes de darla; el oyente recibe **al instante** una ya resuelta por el calentador si la hay (darle pistas sin comprobar = «Reintentando…» y saltos) |
 | `src/popularidad.js`, `src/muestras.js` | «lo más escuchado» (conteos agregados por artista y género, sin sesión/cuenta/IP) y la canción de muestra (carátula + miniclip) de cada banner; `/api/ia/momento`, `/api/muestra` |
+| `src/emisoras.js` | radio en vivo: lista curada (`data/seed/emisoras.json`) y proxy del flujo por id (`/api/emisoras`, `/api/emisora/<id>`), con tope de conexiones; el motor la toca con la orden `emisora` |
 | `src/calentador.js` | precalienta (busca + resuelve) géneros en segundo plano: es lo que hace instantáneo el cambio de género |
 | `src/bienestar.js` | Viaje ISO: curva de energía + **CARACTERES** curados por fase (la energía de `genres.json` es gruesa: no elegir solo por número) |
 | `src/ia/` | Gemini (`GEMINI_KEY`, solo por cabecera) con respaldo local automático; el local prefiere géneros familiares |
@@ -44,7 +45,9 @@ La prueba «la matriz entera tarda poco» (test/bienestar.test.js) mide tiempo: 
 - Horario y anuncios afectan **solo a las pantallas**, nunca a los oyentes del panel.
 - Administración vive en **`/admin`** (página aparte, misma clave que `/remote`); el panel de música ya no la trae.
 - «Lo más escuchado» usa solo conteos agregados (`popularidad.js`): nunca guardar ahí sesión, cuenta ni IP.
-- Sin fuentes externas (Audius, Jamendo, Radio Browser, «Radio en vivo»): todo local salvo yt-dlp, lrclib y Gemini.
+- Sin fuentes externas (Audius, Jamendo, Radio Browser): todo local salvo yt-dlp, lrclib, Gemini y la **radio en vivo**. Esta última (pedida por el usuario el
+  2026-11-11) es solo una **lista curada** de emisoras de Monterrey en `data/seed/emisoras.json`, con el servidor como proxy por id (`src/emisoras.js`).
+  Nada de buscador abierto ni URLs que mande el navegador. Antes de agregar una emisora, comprobar que suena desde la pantalla Windows.
 - Diseño: el del DEACERO Play anterior (negro, naranja `#F59B23`, Inter, Font Awesome alojados en `public/assets/vendor/`). 6 temas, todos AA.
 - 5 oyentes simultáneos esperados.
 

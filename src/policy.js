@@ -23,6 +23,9 @@ const ROUTES = [
   r('GET', /^\/api\/podcasts$/, 'oyente'),
   r('GET', /^\/api\/next$/, 'oyente', { needs: 'sid' }),
   r('GET', /^\/api\/(play|thumb)\/[^/]+$/, 'oyente'),
+  /* Radio en vivo: lista curada y flujo de una emisora por su id (nunca una URL) */
+  r('GET', /^\/api\/emisoras$/, 'oyente'),
+  r('GET', /^\/api\/emisora\/[a-z0-9-]{1,40}$/, 'oyente'),
   r('POST', /^\/api\/podcasts$/, 'clave'),
   r('DELETE', /^\/api\/podcasts\/[a-z0-9]+$/, 'clave'),
   r(['GET', 'DELETE'], /^\/api\/history$/, 'clave'),

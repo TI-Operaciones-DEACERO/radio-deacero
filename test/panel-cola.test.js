@@ -235,3 +235,24 @@ test("409 «superada» en la primera canción: el motor vuelve a pedir y no se q
   assert.equal(rechazos, 2);
   assert.ok(player.getState().track.id);
 });
+
+test("emisora: suena en vivo sin pedir canciones; un id raro se ignora; 'next' vuelve a la radio de canciones", async () => {
+  const { fetchImpl, pedidos } = servidorFalso();
+  const { player } = cargarMotor(fetchImpl);
+  player.handleCommand({ cmd: 'queue', items: [song(1), song(2)] });
+  await esperar(() => player.getState().track);
+  const antes = pedidos.filter((p) => p.includes('/api/next')).length;
+  player.handleCommand({ cmd: 'emisora', emisora: { id: 'la-lupe', nombre: 'La Lupe', frecuencia: '105.3 FM', estilo: 'Clásicos' } });
+  await esperar(() => player.getState().track.live);
+  const st = plano(player.getState());
+  assert.deepEqual({ id: st.track.emisora, t: st.track.title, c: st.track.channel, g: st.genre.id }, { id: 'la-lupe', t: 'La Lupe', c: '105.3 FM · Clásicos', g: 'envivo' });
+  assert.equal(st.cola, null, 'la emisora cancela la lista');
+  assert.equal(pedidos.filter((p) => p.includes('/api/next')).length, antes, 'en vivo no se precargan canciones');
+
+  for (const mal of [{ id: '../x', nombre: 'x' }, { id: 'ok', nombre: '' }, null, { id: 'a'.repeat(41), nombre: 'x' }]) player.handleCommand({ cmd: 'emisora', emisora: mal });
+  assert.equal(player.getState().track.emisora, 'la-lupe');
+
+  player.handleCommand({ cmd: 'next' });
+  await esperar(() => !player.getState().track.live);
+  assert.equal(player.getState().genre.id, 'jazz');
+});

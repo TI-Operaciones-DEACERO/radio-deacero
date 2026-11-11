@@ -630,8 +630,8 @@
 
   /* Subpestañas de Inicio (Recomendado, Bienestar, Podcasts). Elegir una es navegar: actualiza menú y dirección. */
   const rsubs = $('rsubs');
-  const SUB_VISTA = { reco: 'inicio', bienestar: 'bienestar', podcasts: 'podcasts' };
-  const PANE_SUB = { reco: 'sp-reco', bienestar: 'p-bienestar', podcasts: 'sp-podcasts' };
+  const SUB_VISTA = { reco: 'inicio', bienestar: 'bienestar', podcasts: 'podcasts', envivo: 'envivo' };
+  const PANE_SUB = { reco: 'sp-reco', bienestar: 'p-bienestar', podcasts: 'sp-podcasts', envivo: 'sp-envivo' };
   function mostrarSub(sub) {
     subInicio = PANE_SUB[sub] ? sub : 'reco';
     for (const b of rsubs.querySelectorAll('[role="tab"]')) {
@@ -645,7 +645,7 @@
   tablist(rsubs, (tab) => ir(SUB_VISTA[tab.dataset.sub] || 'inicio'));
 
   function marcarMenu() {
-    const enMenu = activa === 'podcasts' ? 'inicio' : activa; /* Podcasts es una subpestaña de Inicio */
+    const enMenu = activa === 'podcasts' || activa === 'envivo' ? 'inicio' : activa; /* Podcasts y En vivo son subpestañas de Inicio */
     for (const b of document.querySelectorAll('.nav-item[data-vista]')) {
       if (b.dataset.vista === enMenu) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }

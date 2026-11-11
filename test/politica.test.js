@@ -85,3 +85,11 @@ test('cobertura: cada ruta /api/... citada en el código aparece en la tabla', (
   }
   assert.deepEqual([...new Set(sin)], []);
 });
+
+test('radio en vivo: la lista y el flujo de una emisora son de oyente (como /api/play) y solo con id de la lista', () => {
+  assert.equal(resolve('GET', '/api/emisoras').level, 'oyente');
+  assert.equal(resolve('GET', '/api/emisora/la-lupe').level, 'oyente');
+  assert.equal(resolve('GET', '/api/emisora/../../etc'), null);
+  assert.equal(resolve('GET', '/api/emisora/https:%2F%2Fx'), null, 'nunca una URL: solo ids');
+  assert.equal(resolve('POST', '/api/emisora/la-lupe'), null);
+});

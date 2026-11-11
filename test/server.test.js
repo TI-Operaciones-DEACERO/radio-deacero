@@ -477,3 +477,22 @@ test('/kiosco sirve la misma página del reproductor (la vista se elige por la r
   assert.equal(await r.text(), '<h1>hola</h1>');
   assert.equal(await (await fetch(`${base}/kiosco/`)).text(), '<h1>hola</h1>');
 }));
+
+test('radio en vivo: /api/emisoras da la lista pública y /api/emisora/<id> pasa al proxy; sin emisoras configuradas → 404', async () => {
+  const pedidas = [];
+  const emisoras = {
+    list: () => [{ id: 'la-lupe', nombre: 'La Lupe', frecuencia: '105.3 FM', banda: 'FM', estilo: 'x' }],
+    escuchar: (id, req, res) => { pedidas.push(id); res.writeHead(200, { 'content-type': 'audio/mpeg' }); res.end('mp3'); }
+  };
+  await run({ deps: { emisoras } }, async ({ base }) => {
+    const j = await (await fetch(`${base}/api/emisoras`)).json();
+    assert.deepEqual(j.emisoras.map((e) => e.id), ['la-lupe']);
+    const r = await fetch(`${base}/api/emisora/la-lupe`);
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), 'mp3');
+    assert.deepEqual(pedidas, ['la-lupe']);
+  });
+  await run({}, async ({ base }) => {
+    assert.equal((await fetch(`${base}/api/emisoras`)).status, 404);
+  });
+});

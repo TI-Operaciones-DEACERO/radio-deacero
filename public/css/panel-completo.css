@@ -202,6 +202,19 @@ main:focus { outline: none; }
 
 /* Géneros destacados */
 .ai-genre-grid > li { display: flex; }
+/* Radio en vivo: tarjetas de texto por banda (sin imágenes: la Pi no lo resiente) */
+.vivo-grupo { margin-top: 18px; }
+.vivo-grupo-t { margin: 0 0 10px; font-size: 1rem; color: var(--text-soft); }
+.vivo-lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+.vivo-lista > li { display: flex; }
+.vivo-card { position: relative; flex: 1; min-height: 92px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; text-align: left; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+.vivo-card:hover { border-color: var(--accent-text); }
+.vivo-frec { font-size: .78rem; font-weight: 700; letter-spacing: .04em; color: var(--accent-text); }
+.vivo-nombre { font-weight: 700; font-size: 1.02rem; }
+.vivo-estilo { font-size: .85rem; color: var(--muted); }
+.vivo-on { display: none; position: absolute; top: 10px; right: 12px; font-size: .72rem; font-weight: 700; color: var(--accent-text); }
+.vivo-card.sonando { border: 2px solid var(--accent-text); background: var(--accent-bg); padding: 11px 13px; }
+.vivo-card.sonando .vivo-on { display: inline; }
 .gen-todos-btn { margin-top: 14px; }
 .gen-todos { margin-top: 12px; }
 .gen-todos input { max-width: 420px; }

@@ -41,6 +41,13 @@
       .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
   }
 
+  /* Radio en vivo: emisoras agrupadas por banda (FM, AM, solo en línea), en ese orden y sin grupos vacíos. */
+  const BANDAS = [['FM', 'FM'], ['AM', 'AM'], ['Internet', 'Solo en línea']];
+  function gruposEmisoras(lista) {
+    const ok = Array.isArray(lista) ? lista.filter((e) => e && typeof e.id === 'string' && e.id && typeof e.nombre === 'string' && e.nombre) : [];
+    return BANDAS.map(([banda, titulo]) => ({ banda, titulo, emisoras: ok.filter((e) => e.banda === banda) })).filter((g) => g.emisoras.length);
+  }
+
   /* El color de un género va a una variable CSS: solo hexadecimal. */
   const colorSeguro = (c) => (typeof c === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(c) ? c : '');
 
@@ -71,6 +78,7 @@
   /* Posición de lo que suena según getState(): duración del motor (o la de la pista), porcentaje y textos. */
   function progreso(s) {
     const t = s && s.track;
+    if (t && t.live) return { pos: num(s.time), dur: 0, pct: 0, actual: 'En vivo', total: '', texto: 'En vivo', buscable: false }; /* emisora: sin duración */
     const dur = num(s && s.duration) > 0 ? s.duration : t && num(t.duration) > 0 ? t.duration : 0;
     const pos = Math.max(0, Math.min(num(s && s.time), dur || Infinity));
     const pct = dur ? Math.round((pos / dur) * 1000) / 10 : 0;
@@ -113,7 +121,7 @@
 
   /* — navegación: cada sección del menú → panel que se muestra y su subpestaña — */
   const DESTINOS = {
-    inicio: ['inicio', 'reco'], bienestar: ['inicio', 'bienestar'], podcasts: ['inicio', 'podcasts'],
+    inicio: ['inicio', 'reco'], bienestar: ['inicio', 'bienestar'], podcasts: ['inicio', 'podcasts'], envivo: ['inicio', 'envivo'],
     buscar: ['buscar', ''], naturaleza: ['naturaleza', ''], parati: ['parati', ''],
     favoritos: ['favoritos', 'likes'], historial: ['favoritos', 'historial']
   };
@@ -130,7 +138,7 @@
   /* Pestañas de abajo en el celular: Inicio, Bienestar, Descubrir (el menú) y Biblioteca. */
   function pestanaMovil(vista) {
     const v = destino(vista).vista;
-    if (v === 'inicio' || v === 'podcasts') return 'inicio';
+    if (v === 'inicio' || v === 'podcasts' || v === 'envivo') return 'inicio';
     if (v === 'bienestar') return 'bienestar';
     if (v === 'favoritos' || v === 'historial') return 'biblioteca';
     return 'descubrir';
@@ -180,7 +188,7 @@
 
   const api = {
     textoAnuncio, escribiendo, altoBarra,
-    DESCUBRIR, DESTACADOS, generosDestacados, todosLosGeneros, colorSeguro, generoSonando, intercalar,
+    DESCUBRIR, DESTACADOS, generosDestacados, todosLosGeneros, gruposEmisoras, colorSeguro, generoSonando, intercalar,
     fmtTiempo, progreso, segundosDesde, iconoVolumen, valorConTecla, textoVolumen,
     CARACTERES, etiquetaCaracter, cargaTermina, cargaSola,
     destino, MENU, vistaDeAtajo, pestanaMovil

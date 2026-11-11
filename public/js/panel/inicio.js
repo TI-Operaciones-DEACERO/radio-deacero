@@ -257,6 +257,54 @@
     }, $('podAct'));
   }
   $('podAct').addEventListener('click', () => { if ($('podAct').getAttribute('aria-disabled') !== 'true') cargarPodcasts().then((ok) => { if (ok) P.toast('Podcasts actualizados.'); }); });
+  /* ───────────── En vivo: emisoras de Monterrey por banda; cada tarjeta sintoniza (el motor la pide al servidor por su id) ───────────── */
+  let vivoCargado = false;
+  async function cargarEnVivo() {
+    const c = $('vivoGrupos');
+    c.setAttribute('aria-busy', 'true');
+    c.replaceChildren(h('ul', { class: 'vivo-lista' }, P.esqueleto('fila', 6)));
+    const r = await A.emisoras();
+    c.removeAttribute('aria-busy');
+    const grupos = r.ok && r.data ? R.gruposEmisoras(r.data.emisoras) : [];
+    if (!grupos.length) {
+      c.replaceChildren(h('div', { class: 'vacio' }, [h('p', { text: L.mensajeError(r.status) }), h('button', { type: 'button', class: 'primary', text: 'Reintentar', onclick: cargarEnVivo })]));
+      return;
+    }
+    vivoCargado = true;
+    c.replaceChildren(...grupos.map((g) => {
+      const tid = 'vivoG-' + g.banda;
+      return h('section', { class: 'vivo-grupo', 'aria-labelledby': tid }, [
+        h('h3', { class: 'vivo-grupo-t', id: tid, text: g.titulo }),
+        h('ul', { class: 'vivo-lista' }, g.emisoras.map((e) => h('li', {}, h('button', { type: 'button', class: 'vivo-card', 'data-emisora': e.id, onclick: () => sintonizar(e) }, [
+          h('span', { class: 'vivo-frec', text: e.frecuencia }),
+          h('span', { class: 'vivo-nombre', text: e.nombre }),
+          h('span', { class: 'vivo-estilo', text: e.estilo }),
+          h('span', { class: 'vivo-on', 'aria-hidden': 'true', text: 'Sonando' }),
+          h('span', { class: 'sr-only vivo-on-txt' })
+        ]))))
+      ]);
+    }));
+    marcarVivo(P.estado());
+  }
+  function sintonizar(e) {
+    P.cargando('Sintonizando ' + e.nombre, e.frecuencia);
+    P.send({ cmd: 'emisora', emisora: { id: e.id, nombre: e.nombre, frecuencia: e.frecuencia, estilo: e.estilo } });
+  }
+  let vivoMarcada = null;
+  function marcarVivo(s) {
+    const id = s && s.track && s.track.live ? s.track.emisora : '';
+    if (id === vivoMarcada) return;
+    vivoMarcada = id;
+    for (const b of document.querySelectorAll('[data-emisora]')) {
+      const si = !!id && b.dataset.emisora === id;
+      b.classList.toggle('sonando', si);
+      b.querySelector('.vivo-on-txt').textContent = si ? ' (sonando ahora)' : '';
+    }
+  }
+  P.on('state', (s) => { if (vivoCargado) marcarVivo(s); });
+  P.on('sub', (s) => { if (s === 'envivo' && !vivoCargado) cargarEnVivo(); });
+  if (P.subInicio() === 'envivo') cargarEnVivo();
+
   P.on('sub', (s) => { if (s === 'podcasts' && !podCargados) cargarPodcasts(); });
   if (P.subInicio() === 'podcasts') cargarPodcasts();
 

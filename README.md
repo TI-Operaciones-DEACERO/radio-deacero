@@ -69,7 +69,7 @@ Se ve y se usa como el **DEACERO Play anterior** (negro, tarjetas #242424, naran
 se puede contraer), **barra superior** (buscador, Apariencia, Ayuda y cuenta) y **barra de reproducción** abajo (portada, título,
 género, anterior / play / siguiente, progreso que se puede mover, Me gusta / No me gusta / playlist, volumen, letra, karaoke, visualizador, naturaleza y **Ver video**; si el navegador no deja
 sonar sin un toque, la música arranca con el primer clic que se haga en el panel). **Inicio es la radio**: subpestañas *Recomendado* («Lo más escuchado del momento»: artistas y géneros; con sesión, también «Recomendado para ti»; Bienestar rápido
-y géneros destacados, con «Ver todos los géneros» debajo: la lista completa, filtrable y solo texto), *Bienestar* y *Podcasts* (temas sugeridos y, debajo, sus episodios con portada: *Escuchar* o *Ver video*). Mientras se busca o la IA
+y géneros destacados, con «Ver todos los géneros» debajo: la lista completa, filtrable y solo texto), *Bienestar*, *En vivo* (radio de Monterrey en directo: 28 emisoras de FM, AM y solo en línea, de una lista curada en `data/seed/emisoras.json`; el servidor hace de proxy, así que suena aunque el equipo no alcance la emisora; si se corta, reconecta; «siguiente» vuelve a la música) y *Podcasts* (temas sugeridos y, debajo, sus episodios con portada: *Escuchar* o *Ver video*). Mientras se busca o la IA
 piensa aparece una **capa de carga grande** («Pensando…», «Buscando lo mejor para recomendarte»; se quita sola al sonar y tiene «Ocultar»; el texto de abajo se vuelve más claro si la espera se alarga). Las listas muestran **esqueletos** (la silueta de lo que viene) y las secciones que se abren por primera vez, un ecualizador pequeño, en vez de un «Cargando…» seco. «Sugerido por IA» solo aparece cuando lo sugirió Gemini (con el motor local no se muestra nada). **Ver video** muestra
 el video (sin sonido propio, sigue al audio) de lo que suena; solo se pide mientras está abierto. En el celular (≤ 768 px) no hay barra lateral: abajo van la barra compacta y las pestañas Inicio, Bienestar, Descubrir (el menú) y Biblioteca.
 El **motor de audio** es un iframe oculto (`/?view=local&mode=audio&sid=…`) que se crea una vez: navegar no corta la música. Cada módulo pesado se descarga al abrir su vista.
@@ -233,6 +233,7 @@ servidor (el estado del radio —género y recientes— es uno solo). Está pens
 | `/api/auth/login\|logout\|me\|profile\|export` | cuenta por nómina (cookie `pl_user`, HttpOnly, 7 días) |
 | `/api/me/reactions\|playlists\|history\|taste\|prefs` | biblioteca de MI cuenta |
 | `/api/ia/ahora\|para-ti\|descubrir\|artistas\|podcasts\|playlist` | recomendaciones (Gemini o local) |
+| `GET /api/emisoras`, `GET /api/emisora/<id>` | Radio en vivo: lista curada y flujo de una emisora (proxy; solo ids de la lista) |
 | `GET /api/bienestar/opciones`, `POST\|DELETE /api/bienestar/viaje?sid=` | Bienestar |
 | `/api/admin/estado\|horario\|horario/generar\|horario/ahora\|anuncios\|ajustes\|diagnostico\|usuarios` | administración (clave) |
 | `GET /api/anuncio/:id` | audio de un anuncio (lo pide la pantalla) |

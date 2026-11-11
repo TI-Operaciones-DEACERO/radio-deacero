@@ -32,6 +32,7 @@ const { createDiagnostico } = require('./src/diagnostico');
 const { createCalentador } = require('./src/calentador');
 const { createPopularidad } = require('./src/popularidad');
 const { createMuestras } = require('./src/muestras');
+const { createEmisoras } = require('./src/emisoras');
 const genres = require('./data/genres.json');
 
 const PORT = Number(process.env.PORT) || 8000;
@@ -82,6 +83,7 @@ else if (process.env.ENTRADA_SECRETO.length < 16) diag.add('auth', 'aviso', 'ENT
 const server = createServer({
   publicDir: path.join(__dirname, 'public'),
   genres, ytdlp, radio, proxy, muestras, popularidad,
+  emisoras: createEmisoras({ lista: require('./data/seed/emisoras.json').emisoras }), /* radio en vivo: FM y AM de Monterrey */
   thumbs: createThumbs(),
   lyrics: createLyrics(),
   control, programa, anuncios, ajustes, diag,

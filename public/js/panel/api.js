@@ -87,6 +87,7 @@
 
     /* Fase 5 (oyente: buscar y letras exigen el id de sesión) */
     generos: () => call('GET', '/api/genres'),
+    emisoras: () => call('GET', '/api/emisoras'), /* radio en vivo: lista curada */
     buscar: (sid, q) => call('GET', '/api/buscar?q=' + e(q) + '&sid=' + e(sid)),
     letra: (sid, t) => call('GET', '/api/lyrics?title=' + e(t.title || '') + '&channel=' + e(t.channel || '') + '&duration=' + e(String(t.duration || 0)) + '&sid=' + e(sid)),
 

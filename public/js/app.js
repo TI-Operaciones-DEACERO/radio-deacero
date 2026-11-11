@@ -154,18 +154,20 @@
     img.classList.remove('on');
     img.onload = () => img.classList.add('on');
     img.onerror = () => img.classList.remove('on');
+    if (state.current && state.current.track.live) { img.removeAttribute('src'); return; } /* emisora en vivo: no hay carátula de YouTube */
     img.src = thumbUrl(id);
   }
 
+  const enVivo = () => !!(state.current && state.current.track.live);
   function loadSrc() {
-    media.src = playUrl(state.current.track.id, 'audio');
+    media.src = enVivo() ? withT('/api/emisora/' + state.current.track.emisora) : playUrl(state.current.track.id, 'audio');
     syncVideoSource();
     startPlayback();
   }
 
-  /* El video solo se pide en modo video; al volver a audio se libera. */
+  /* El video solo se pide en modo video; al volver a audio se libera. Una emisora en vivo no tiene video. */
   function syncVideoSource() {
-    if (state.mode === 'video' && state.current) {
+    if (state.mode === 'video' && state.current && !enVivo()) {
       vid.poster = thumbUrl(state.current.track.id); /* se ve la carátula hasta el primer cuadro (no un recuadro negro) */
       vid.src = playUrl(state.current.track.id, 'video');
       vid.addEventListener('loadedmetadata', () => {
@@ -189,7 +191,7 @@
     $('title').classList.toggle('long', t.title.length > 60); /* letra más chica para que se lea completo */
     $('channel').textContent = t.channel || '';
     $('tNow').textContent = '0:00';
-    $('tDur').textContent = U.fmtTime(t.duration);
+    $('tDur').textContent = t.live ? 'En vivo' : U.fmtTime(t.duration);
     setRange($('seek'), 0);
     document.title = '▶ ' + t.title;
     setArt(t.id);
@@ -199,7 +201,7 @@
     setMediaSession(item);
     loadSrc();
     reportState();
-    if (state.lyrics.open) loadLyrics();
+    if (state.lyrics.open && !t.live) loadLyrics();
   }
 
   /* Una carga a la vez, pero lo que elige la persona (género, búsqueda, canción, lista) no espera a la anterior: abre otra y la vieja,
@@ -272,6 +274,17 @@
     topUp();
   }
 
+  /* Radio en vivo: una emisora de la lista curada (el servidor hace de proxy por su id). No precarga canciones; «siguiente» vuelve a la radio. */
+  const EN_VIVO = { id: 'envivo', label: 'En vivo', emoji: '📻', color: '#ef4444' };
+  function playEmisora(e) {
+    if (!e || typeof e.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(e.id) || typeof e.nombre !== 'string' || !e.nombre.trim()) return;
+    cerrarCarga(abrirCarga(false));
+    if (state.current) state.history.push(state.current);
+    state.gen++; state.queue.length = 0; state.semilla = ''; state.vivoFallos = 0; /* lo que se estuviera precargando ya no sirve */
+    const sub = [e.frecuencia, e.estilo].filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 60)).join(' · ');
+    playItem({ track: { id: 'envivo-' + e.id, emisora: e.id, title: e.nombre.trim().slice(0, 80), channel: sub, duration: 0, live: true }, genre: Object.assign({}, EN_VIVO), genreChanged: true });
+  }
+
   /* Cola externa: reproduce la lista en orden (canciones conocidas o consultas que se resuelven con la búsqueda) y al terminar vuelve la radio.
      No precarga la radio mientras dura. Termina con cualquier orden de género, búsqueda o pista suelta, o al mandar una lista vacía. */
   const PLAN_GENRE = { id: 'lista', label: 'Mi lista', emoji: '🎵', color: '#F59B23' };
@@ -309,6 +322,15 @@
   /* ── errores y vigilancia ───────────────────────────────────── */
   async function onFail(reason) {
     if (state.loading || !state.current) return;
+    if (enVivo()) { /* la emisora se cortó o no contesta: reconecta unas veces; si sigue sin señal, avisa y se queda (no salta a canciones) */
+      const yo = state.current;
+      state.vivoFallos = (state.vivoFallos || 0) + 1;
+      if (state.vivoFallos > 3) { state.vivoFallos = 0; toast('La emisora no responde. Prueba otra o vuelve a intentarlo.', 5000); media.pause(); return; }
+      toast('Reconectando con la emisora…', 1800);
+      await sleep(2000 * state.vivoFallos);
+      if (state.current === yo) loadSrc();
+      return;
+    }
     /* Primero se reintenta la misma pista una vez (URL caducada, Pi ocupada); después se salta. */
     if (state.retryId !== state.current.track.id) {
       state.retryId = state.current.track.id;
@@ -340,12 +362,12 @@
   media.addEventListener('waiting', () => { armStall(); vid.pause(); });
   media.addEventListener('stalled', armStall);
   media.addEventListener('playing', () => {
-    clearStall(); state.failures = 0; setPlayIcon(true); ensureAudioGraph(); startVis(); reportState();
+    clearStall(); state.failures = 0; state.vivoFallos = 0; setPlayIcon(true); ensureAudioGraph(); startVis(); reportState();
     if (vid.getAttribute('src')) vid.play().catch(() => {});
   });
   media.addEventListener('pause', () => { clearStall(); setPlayIcon(false); vid.pause(); reportState(); });
   media.addEventListener('seeked', () => { if (vid.getAttribute('src')) { try { vid.currentTime = media.currentTime; } catch (_) { /* sin seek */ } } });
-  media.addEventListener('ended', () => advance());
+  media.addEventListener('ended', () => { if (enVivo()) onFail('La emisora se cortó.'); else advance(); }); /* un flujo en vivo no «termina»: se reconecta */
 
   /* El video sigue al audio: si se desfasa más de 0.35 s se reengancha. */
   setInterval(() => {
@@ -566,7 +588,7 @@
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: item.track.title, artist: item.track.channel || '', album: item.genre.label,
-        artwork: [{ src: location.origin + thumbUrl(item.track.id), sizes: '1280x720', type: 'image/jpeg' }]
+        artwork: item.track.live ? [] : [{ src: location.origin + thumbUrl(item.track.id), sizes: '1280x720', type: 'image/jpeg' }]
       });
     } catch (_) { /* navegador sin soporte */ }
   }
@@ -646,7 +668,7 @@
   function handleCommand(c) {
     const say = (m, ms) => { if (!LOCAL) toast('Remoto · ' + m, ms); }; /* el aviso "Remoto ·" solo tiene sentido en una pantalla */
     if (CMD_LABEL[c.cmd]) say(CMD_LABEL[c.cmd], 1500);
-    if (c.cmd === 'genre' || c.cmd === 'search' || c.cmd === 'random' || c.cmd === 'track') state.plan = null; /* lo que se pide ahora cancela la lista */
+    if (c.cmd === 'genre' || c.cmd === 'search' || c.cmd === 'random' || c.cmd === 'track' || c.cmd === 'emisora') state.plan = null; /* lo que se pide ahora cancela la lista */
     switch (c.cmd) {
       case 'toggle': toggle(); break;
       case 'play': startPlayback(); break;
@@ -657,6 +679,7 @@
       case 'genre': say('género', 1500); changeGenre(c.id); break;
       case 'search': say('buscando "' + c.q + '"', 2500); playQuery(c.q); break;
       case 'track': say(c.kind === 'podcast' ? 'podcast' : 'canción', 2000); playTrackOnce(c.track, c.kind); break;
+      case 'emisora': say('radio en vivo', 2000); playEmisora(c.emisora); break;
       case 'queue': startPlan(c.items, c.index); break;
       case 'volume': if (c.set !== undefined) setVolumeValue(c.set); else nudgeVolume(c.delta); break;
       case 'mute': toggleMute(); break;
