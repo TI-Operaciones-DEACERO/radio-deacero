@@ -150,6 +150,7 @@
     visor.hidden = true;
     $('bVideo').setAttribute('aria-pressed', 'false');
     vv.pause(); vv.removeAttribute('src'); vv.removeAttribute('poster'); vv.dataset.id = ''; vv.load();
+    $('visorCargando').hidden = true;
     if (volverFoco) $('bVideo').focus();
   }
   function seguirVideo(s) {
@@ -159,15 +160,26 @@
     if (!t) return;
     if (vv.dataset.id !== t.id) {
       vv.dataset.id = t.id;
+      if (t.live) { /* emisora en vivo: no hay video */
+        vv.pause(); vv.removeAttribute('src'); vv.removeAttribute('poster'); vv.load();
+        $('visorCargando').hidden = true;
+        $('visorAviso').textContent = 'Una emisora en vivo no tiene video. El audio sigue sonando.';
+        $('visorAviso').hidden = false;
+        return;
+      }
       $('visorAviso').hidden = true;
+      $('visorAviso').textContent = 'El video de esta pista no está disponible. El audio sigue sonando.';
+      $('visorCargando').hidden = false;
       vv.poster = '/api/thumb/' + encodeURIComponent(t.id);
       vv.src = '/api/play/' + encodeURIComponent(t.id) + '?mode=video';
     }
+    if (t.live) return;
     if (s.paused) { if (!vv.paused) vv.pause(); return; }
     if (vv.readyState >= 1 && Number.isFinite(s.time) && Math.abs(vv.currentTime - s.time) > 0.6) { try { vv.currentTime = s.time; } catch (_) { /* sin seek */ } }
     if (vv.paused) vv.play().catch(() => {});
   }
-  vv.addEventListener('error', () => { if (vv.getAttribute('src')) $('visorAviso').hidden = false; });
+  vv.addEventListener('error', () => { $('visorCargando').hidden = true; if (vv.getAttribute('src')) $('visorAviso').hidden = false; });
+  vv.addEventListener('playing', () => { $('visorCargando').hidden = true; });
   $('bVideo').addEventListener('click', () => { if (visor.hidden) abrirVideo(); else cerrarVideo(true); });
   $('visorCerrar').addEventListener('click', () => cerrarVideo(true));
   visor.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); cerrarVideo(true); } });
@@ -808,12 +820,18 @@
   }
   function pintarSonido() {
     $('locutorOn').checked = locutorOn;
+    $('vitrinaOn').checked = !window.Panel.vitrina || window.Panel.vitrina.activa();
     $('locutorNota').textContent = 'Suena una sola vez, al empezar a escuchar, con la música baja mientras dura. Calla si silencias la música.';
   }
   $('locutorOn').addEventListener('change', () => {
     locutorOn = $('locutorOn').checked;
     if (locutorOn) store.del(LS_LOCUTOR); else { store.set(LS_LOCUTOR, '0'); callarJingle(); }
     toast(locutorOn ? 'Locutor activado.' : 'Locutor desactivado.');
+  });
+  $('vitrinaOn').addEventListener('change', () => {
+    const si = $('vitrinaOn').checked;
+    if (window.Panel.vitrina) window.Panel.vitrina.activar(si);
+    toast(si ? 'Portadas en movimiento.' : 'Portadas quietas.');
   });
   $('aparienciaBtn').addEventListener('click', () => {
     pintarTemas();

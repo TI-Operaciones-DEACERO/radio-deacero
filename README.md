@@ -83,7 +83,10 @@ Los iconos de Font Awesome son un recorte (`iconos.min.css`, ~3 KB): si usas uno
   que van con la hora (`/api/ia/momento`, motor local, sin Gemini). **Recomendado para ti** (solo con sesión) es lo **personal**: según lo que escuchas y tus Me gusta (`/api/ia/para-ti`).
 - **Banners con carátula y miniclip:** las tarjetas de género y artista muestran la carátula de una canción de muestra (`/api/muestra`, con caché; dos a la vez para no saturar yt-dlp;
   al hallar la muestra el servidor deja **preparado su video**, para que el miniclip arranque en cuanto se pasa el cursor)
-  y, al pasar el cursor o enfocar con el teclado, un **miniclip mudo** de 5 s (sin bucle). Solo con ratón, sin «reducir movimiento» ni ahorro de datos; uno a la vez; `Esc` lo quita. En el celular, solo la carátula.
+  y un **miniclip mudo** de 5 s (sin bucle): **solo y por turnos** entre las tarjetas que se ven (vitrina, también en el celular), o al pasar el cursor / enfocar con el
+  teclado. Uno a la vez; `Esc` lo quita. La vitrina se apaga en *Apariencia → Movimiento* (WCAG 2.2.2) y nunca corre con «reducir movimiento», ahorro de datos o la
+  pestaña oculta. Si alguien pide de verdad un video que esperaba en la fila de adornos (el miniclip que se va a ver, «Ver video»), **sube a prioridad normal**.
+  **Ver video** muestra «Cargando el video…» hasta que se mueve (YouTube tarda unos segundos); una emisora en vivo avisa que no tiene video.
   Los álbumes no existen en la app (todo sale de búsquedas de canciones), por eso solo hay banners de género y artista.
 - **Aviso «Estás escuchando Radio Deacero»:** el mismo audio (`/assets/jingle.mp3`) que `/` y `/kiosco` ponen cada 20 min; en el panel suena **una sola vez, al empezar
   a escuchar** (primer Play o primera música elegida), con la música baja mientras dura. Se apaga en *Apariencia → Sonido* (se recuerda en el navegador); calla si se silencia.

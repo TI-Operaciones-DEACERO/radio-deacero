@@ -47,7 +47,16 @@
     return Math.min(30, Math.round(dur * 0.25));
   }
 
-  const api = { primerSonido, debeHablar, debeJingle, volumenVoz, DUCK, nivelDuck, mensajeEspera, CLIP_SEG, puedeMiniclip, inicioClip };
+  /* Vitrina: los banners visibles muestran su miniclip SOLOS, uno a la vez y por turnos (también en táctil). Es movimiento automático continuo,
+     así que se puede apagar en Apariencia (WCAG 2.2.2); además respeta «reducir movimiento», el ahorro de datos y se detiene con la página oculta. */
+  const VITRINA_PAUSA_SEG = 2;
+  const puedeVitrina = (e) => !!e && e.activa !== false && e.reducido !== true && e.ahorro !== true && e.visible !== false;
+  function siguienteVitrina(n, ultimo) {
+    if (!(n > 0)) return -1;
+    return Number.isInteger(ultimo) && ultimo >= 0 && ultimo < n - 1 ? ultimo + 1 : 0;
+  }
+
+  const api = { primerSonido, debeHablar, debeJingle, volumenVoz, DUCK, nivelDuck, mensajeEspera, CLIP_SEG, puedeMiniclip, inicioClip, VITRINA_PAUSA_SEG, puedeVitrina, siguienteVitrina };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PanelLocutor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

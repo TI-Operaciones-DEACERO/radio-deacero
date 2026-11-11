@@ -85,3 +85,21 @@ test('debeJingle: «Estás escuchando Radio Deacero» suena solo al empezar (una
   assert.equal(LO.debeJingle({ ...base, volumen: 0 }), false);
   assert.equal(LO.debeJingle(null), false);
 });
+
+test('vitrina: los miniclips se mueven solos (también sin ratón) salvo que se apague, con «reducir movimiento», ahorro de datos o la página oculta', () => {
+  const ok = { activa: true, reducido: false, ahorro: false, visible: true };
+  assert.equal(LO.puedeVitrina(ok), true);
+  assert.equal(LO.puedeVitrina({ ...ok, activa: false }), false, 'el interruptor de Apariencia la apaga (WCAG 2.2.2)');
+  assert.equal(LO.puedeVitrina({ ...ok, reducido: true }), false);
+  assert.equal(LO.puedeVitrina({ ...ok, ahorro: true }), false);
+  assert.equal(LO.puedeVitrina({ ...ok, visible: false }), false);
+  assert.equal(LO.puedeVitrina(null), false);
+});
+
+test('siguienteVitrina: por turnos entre las tarjetas visibles, empezando por la primera y volviendo al inicio', () => {
+  assert.equal(LO.siguienteVitrina(4, -1), 0);
+  assert.equal(LO.siguienteVitrina(4, 0), 1);
+  assert.equal(LO.siguienteVitrina(4, 3), 0);
+  assert.equal(LO.siguienteVitrina(4, 9), 0, 'si la anterior ya no está, empieza de nuevo');
+  assert.equal(LO.siguienteVitrina(0, 2), -1, 'sin tarjetas no hay turno');
+});

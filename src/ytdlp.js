@@ -61,17 +61,27 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
   let current = cmd;
   let versionStr = null;
   const cache = new Map();     /* `${id}|${mode}` → { url, duration, expires } */
-  const inflight = new Map();  /* misma clave → Promise */
+  const inflight = new Map();  /* misma clave → { p: Promise, ficha } */
   let active = 0, activeBaja = 0;
   const waiting = [], waitingBaja = [];
 
-  function slot(baja) {
-    if (baja) {
+  /* ficha = { baja }: con qué prioridad corre (puede subir mientras espera; ver subir()). */
+  function slot(ficha) {
+    if (ficha.baja) {
       if (active < concurrency && activeBaja < MAX_BAJA && !waiting.length) { active++; activeBaja++; return Promise.resolve(); }
-      return new Promise((r) => waitingBaja.push(r));
+      return new Promise((r) => { ficha.espera = r; waitingBaja.push(r); });
     }
     if (active < concurrency) { active++; return Promise.resolve(); }
     return new Promise((r) => waiting.push(r));
+  }
+  /* Un adorno que ESPERA pasa a prioridad normal (alguien pidió de verdad ese mismo video): sale de la fila de adornos y entra a la normal,
+     o arranca ya si hay lugar. Si ya está corriendo no hay nada que hacer. */
+  function subir(ficha) {
+    const i = ficha.baja && ficha.espera ? waitingBaja.indexOf(ficha.espera) : -1;
+    if (i < 0) return;
+    waitingBaja.splice(i, 1);
+    ficha.baja = false;
+    if (active < concurrency) { active++; ficha.espera(); } else waiting.push(ficha.espera);
   }
   /* El lugar que se libera pasa primero a la música en fila; si no hay, a un adorno (si no hay otro adorno en curso). */
   function release(baja) {
@@ -82,10 +92,12 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
     active--;
   }
 
-  function run(args, timeoutMs = 25000, { baja = false } = {}) {
+  function run(args, timeoutMs = 25000, { baja = false, ficha = { baja } } = {}) {
     if (!current) return Promise.reject(new Error('yt-dlp no disponible'));
-    if (baja ? waitingBaja.length >= MAX_WAITING_BAJA : active >= concurrency && waiting.length >= maxWaiting) return Promise.reject(new Error('yt-dlp: cola llena'));
-    return slot(baja).then(() => new Promise((resolve, reject) => {
+    if (ficha.baja ? waitingBaja.length >= MAX_WAITING_BAJA : active >= concurrency && waiting.length >= maxWaiting) return Promise.reject(new Error('yt-dlp: cola llena'));
+    return slot(ficha).then(() => new Promise((resolve, reject) => {
+      const baja = ficha.baja; /* la prioridad con la que de verdad tomó el lugar */
+      ficha.espera = null;
       let out = '';
       let err = '';
       let settled = false;
@@ -144,10 +156,15 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
     const key = `${id}|${mode}`;
     const hit = cache.get(key);
     if (hit && hit.expires > now()) return Promise.resolve({ url: hit.url, duration: hit.duration });
-    if (inflight.has(key)) return inflight.get(key);
+    if (inflight.has(key)) {
+      const f = inflight.get(key);
+      if (!baja) subir(f.ficha); /* lo pide alguien de verdad: si esperaba como adorno, ya no espera detrás de otros adornos */
+      return f.p;
+    }
 
+    const ficha = { baja };
     const p = run(['--no-playlist', '-f', FORMATS[mode], '--print', 'duration', '--print', 'urls',
-      '--no-warnings', '--socket-timeout', '8', `https://www.youtube.com/watch?v=${id}`], undefined, { baja })
+      '--no-warnings', '--socket-timeout', '8', `https://www.youtube.com/watch?v=${id}`], undefined, { ficha })
       .then((out) => {
         const lines = out.split('\n').map((s) => s.trim()).filter(Boolean);
         const url = lines.find((s) => s.startsWith('http'));
@@ -162,7 +179,7 @@ function createYtdlp({ spawn = realSpawn, cmd = null, now = Date.now, concurrenc
         return res;
       })
       .finally(() => inflight.delete(key));
-    inflight.set(key, p);
+    inflight.set(key, { p, ficha });
     return p;
   }
 

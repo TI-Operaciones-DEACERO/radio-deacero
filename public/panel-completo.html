@@ -282,7 +282,11 @@
     <p class="visor-titulo" id="visorTitulo"></p>
     <button type="button" class="ghost" id="visorCerrar"><i class="fas fa-xmark" aria-hidden="true"></i> Cerrar video</button>
   </div>
-  <video id="visorVideo" class="visor-video" muted playsinline preload="none"></video>
+  <div class="visor-marco">
+    <video id="visorVideo" class="visor-video" muted playsinline preload="none"></video>
+    <!-- Mientras llega el video se ve la miniatura: este aviso deja claro que sí viene (YouTube tarda unos segundos en dar el video) -->
+    <p class="visor-cargando" id="visorCargando" role="status" hidden><span class="carga-eq mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>Cargando el video…</span></p>
+  </div>
   <p class="visor-aviso" id="visorAviso" hidden>El video de esta pista no está disponible. El audio sigue sonando.</p>
 </section>
 
@@ -353,6 +357,11 @@
     <legend>Sonido</legend>
     <label class="check" for="locutorOn"><input type="checkbox" id="locutorOn" checked aria-describedby="locutorNota"><span>Aviso «Estás escuchando Radio Deacero» al empezar</span></label>
     <p class="hint" id="locutorNota"></p>
+  </fieldset>
+  <fieldset class="sonido">
+    <legend>Movimiento</legend>
+    <label class="check" for="vitrinaOn"><input type="checkbox" id="vitrinaOn" checked aria-describedby="vitrinaNota"><span>Portadas en movimiento (miniclips de los cuadros)</span></label>
+    <p class="hint" id="vitrinaNota">Los cuadros que se ven muestran un clip mudo de 5 segundos, uno a la vez. Con «reducir movimiento» del sistema no se mueven.</p>
   </fieldset>
   <p class="hint">¿Administras este equipo? Administración está en su propia página: <a class="link" href="/admin">Ir a Administración</a> (pide la clave del control remoto).</p>
   <div class="row"><button type="button" class="ghost" id="apCerrar">Cerrar</button></div>

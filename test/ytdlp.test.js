@@ -240,3 +240,27 @@ test('prioridad: si la fila de baja prioridad está llena se rechaza enseguida (
   for (let i = 0; i < 15; i++) { for (const p of spawn.vivos) if (!p.soltado) { p.soltado = true; p.soltar(); } await tic(); await tic(); }
   await Promise.all(ps);
 });
+
+test('prioridad: si alguien pide DE VERDAD un video que esperaba en la fila de adornos, sube a prioridad normal (no se queda detrás de otros adornos)', async () => {
+  const spawn = spawnManual();
+  const yt = createYtdlp({ spawn, cmd: CMD, concurrency: 2, now: () => NOW });
+  const bajas = [ID('a'), ID('b'), ID('c')].map((id) => yt.resolve(id, 'video', { baja: true }));
+  await tic();
+  assert.equal(spawn.vivos.length, 1, 'un adorno en curso; b y c esperan');
+  const pedido = yt.resolve(ID('c'), 'video'); /* el miniclip de c ya se muestra / «Ver video» de c */
+  await tic();
+  assert.equal(spawn.vivos.length, 2, 'c arranca ya en el lugar libre, sin esperar a b');
+  assert.equal(idDe(spawn.vivos[1]), ID('c'));
+  spawn.vivos[1].soltado = true; spawn.vivos[1].soltar();
+  const r = await pedido;
+  assert.match(r.url, /googlevideo/);
+  for (let i = 0; i < 6; i++) { for (const p of spawn.vivos) if (!p.soltado) { p.soltado = true; p.soltar(); } await tic(); await tic(); }
+  await Promise.all(bajas);
+  assert.equal(spawn.vivos.length, 3, 'c no se resolvió dos veces');
+  /* y el lugar de adornos quedó bien contado: otro adorno puede volver a correr */
+  const otro = yt.resolve(ID('d'), 'video', { baja: true });
+  await tic();
+  assert.equal(spawn.vivos.length, 4);
+  spawn.vivos[3].soltado = true; spawn.vivos[3].soltar();
+  await otro;
+});
